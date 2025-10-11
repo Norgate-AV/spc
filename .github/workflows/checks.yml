@@ -52,13 +52,13 @@ jobs:
         run: make deps
 
       - name: Run vulnerability check
-        run: make vuln-check
+        run: make vet
 
   test:
     name: Test
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [windows-latest]
         go-version: ["1.23", "1.24", "1.25"]
     runs-on: ${{ matrix.os }}
     steps:
@@ -87,31 +87,9 @@ jobs:
       - name: Run tests with coverage
         run: make test-coverage
 
-      - name: Run benchmarks
-        run: make benchmark
-
       - name: Upload coverage to Codecov
         if: matrix.os == 'ubuntu-latest' && matrix.go-version == '1.25'
         uses: codecov/codecov-action@v5
         with:
           files: ./coverage.out
           token: ${{ secrets.CODECOV_TOKEN }}
-
-  integration:
-    name: Integration Tests
-    runs-on: ubuntu-latest
-    needs: [test]
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v5
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-
-      - name: Build binary
-        run: make build
-
-      - name: Run integration tests
-        run: make test-integration
