@@ -4,12 +4,12 @@ CLI wrapper for the Crestron SIMPL+ Compiler
 ## Usage
 
 ```bash
-spc [command] [options] <file>
+spc [command] [options] <file> [file...]
 ```
 
 ### Commands
 
-- `build` (default): Compile a SIMPL+ program
+- `build` (default): Compile one or more SIMPL+ programs
 
 ### Options
 
@@ -20,14 +20,14 @@ spc [command] [options] <file>
 ### Examples
 
 ```bash
-# Compile for 3-Series
+# Compile single file for 3-Series
 spc build --target 3 example.usp
 
-# Compile for 3-Series and 4-Series
-spc build --target 34 example.usp
+# Compile multiple files for 3 and 4-Series
+spc --target 34 example.usp another.usl
 
 # Default command (build) can be omitted
-spc --target 3 example.usp
+spc --target 3 file1.usp file2.usp
 ```
 
 ## Configuration

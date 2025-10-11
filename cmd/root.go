@@ -14,7 +14,7 @@ var rootCmd = &cobra.Command{
 	Long:         `A CLI wrapper for the Crestron SIMPL+ compiler tool.`,
 	RunE:         runBuild,
 	SilenceUsage: true,
-	Args:         cobra.ExactArgs(1),
+	Args:         cobra.ArbitraryArgs,
 }
 
 func Execute() {

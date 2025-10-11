@@ -21,20 +21,22 @@ var buildCmd = &cobra.Command{
 }
 
 func runBuild(cmd *cobra.Command, args []string) error {
-	if len(args) != 1 {
-		return fmt.Errorf("requires exactly one file argument")
+	if len(args) < 1 {
+		return fmt.Errorf("requires at least one file argument")
 	}
 
-	file := args[0]
-	// check file extension
-	if !strings.HasSuffix(file, ".usp") && !strings.HasSuffix(file, ".usl") {
-		return fmt.Errorf("file must have .usp or .usl extension")
-	}
-
-	// resolve to absolute path
-	absFile, err := filepath.Abs(file)
+	// resolve absolute path for the first file to find config
+	firstFile := args[0]
+	absFirstFile, err := filepath.Abs(firstFile)
 	if err != nil {
 		return fmt.Errorf("failed to resolve absolute path: %w", err)
+	}
+
+	// check file extension for all files
+	for _, file := range args {
+		if !strings.HasSuffix(file, ".usp") && !strings.HasSuffix(file, ".usl") {
+			return fmt.Errorf("file %s must have .usp or .usl extension", file)
+		}
 	}
 
 	// load config
@@ -60,7 +62,7 @@ func runBuild(cmd *cobra.Command, args []string) error {
 	}
 
 	// local config
-	dir := filepath.Dir(absFile)
+	dir := filepath.Dir(absFirstFile)
 	localPath := findLocalConfig(dir)
 	if localPath != "" {
 		viper.SetConfigFile(localPath)
@@ -91,10 +93,17 @@ func runBuild(cmd *cobra.Command, args []string) error {
 	}
 
 	cmdArgs = append(cmdArgs, "/rebuild")
-	cmdArgs = append(cmdArgs, absFile)
+	for _, file := range args {
+		absFile, err := filepath.Abs(file)
+		if err != nil {
+			return fmt.Errorf("failed to resolve absolute path for %s: %w", file, err)
+		}
+
+		cmdArgs = append(cmdArgs, absFile)
+	}
 
 	if verbose {
-		fmt.Printf("Compiler: %s\nTarget: %s\nSeries: %v\nFile: %s\nCommand: %s %s\n", compiler, target, series, absFile, compiler, strings.Join(cmdArgs, " "))
+		fmt.Printf("Compiler: %s\nTarget: %s\nSeries: %v\nFiles: %v\nCommand: %s %s\n", compiler, target, series, args, compiler, strings.Join(cmdArgs, " "))
 	}
 
 	c := execCommand(compiler, cmdArgs...)

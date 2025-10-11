@@ -22,7 +22,7 @@ linters-settings:
     sections:
       - standard
       - default
-      - prefix(github.com/damienbutt/emojify)
+      - prefix(github.com/Norgate-AV/spc)
   goconst:
     min-len: 2
     min-occurrences: 2
@@ -42,7 +42,7 @@ linters-settings:
   gocyclo:
     min-complexity: 15
   goimports:
-    local-prefixes: github.com/damienbutt/emojify
+    local-prefixes: github.com/Norgate-AV/spc
   golint:
     min-confidence: 0
   mnd:
