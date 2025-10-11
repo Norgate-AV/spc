@@ -97,9 +97,11 @@ func runBuild(cmd *cobra.Command, args []string) error {
 		fmt.Printf("Compiler: %s\nTarget: %s\nSeries: %v\nFile: %s\nCommand: %s %s\n", compiler, target, series, absFile, compiler, strings.Join(cmdArgs, " "))
 	}
 
-	c := exec.Command(compiler, cmdArgs...)
-	c.Stdout = os.Stdout
-	c.Stderr = os.Stderr
+	c := execCommand(compiler, cmdArgs...)
+	if cmd, ok := c.(*exec.Cmd); ok {
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+	}
 
 	err = c.Run()
 	if err != nil {
@@ -115,7 +117,7 @@ func runBuild(cmd *cobra.Command, args []string) error {
 }
 
 func parseTarget(t string) []string {
-	var series []string
+	series := make([]string, 0)
 
 	for _, r := range t {
 		if s := int(r - '0'); s >= 2 && s <= 4 {
@@ -145,4 +147,12 @@ func findLocalConfig(dir string) string {
 	}
 
 	return ""
+}
+
+var execCommand = func(name string, args ...string) Commander {
+	return exec.Command(name, args...)
+}
+
+type Commander interface {
+	Run() error
 }
