@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [master, develop]
+  pull_request:
+    branches: [master, develop]
+
+jobs:
+  checks:
+    name: Run Checks
+    uses: ./.github/workflows/checks.yml
+    permissions:
+      contents: read
+      statuses: write
+    secrets: inherit
+
+  build:
+    name: Build Cross-Platform
+    runs-on: ubuntu-latest
+    needs: [checks]
+    strategy:
+      matrix:
+        goos: [windows]
+        goarch: [amd64]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build optimized cross-platform binary
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          EXT=""
+          if [ "$GOOS" = "windows" ]; then
+            EXT=".exe"
+          fi
+          make release
+          mv build/emojify "emojify-$GOOS-$GOARCH$EXT"
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: emojify-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: emojify-*
+          retention-days: 30

@@ -1,0 +1,95 @@
+version: 2
+
+project_name: spc
+
+before:
+  hooks:
+    - make clean
+    - go generate ./...
+    - go mod tidy
+    - ./scripts/generate-changelog.sh {{ .Tag }}
+    - ./scripts/generate-release-notes.sh {{ .Tag }}
+
+builds:
+  - main: ./main.go
+    binary: spc
+    env:
+      - CGO_ENABLED=0
+    goarch:
+      - amd64
+    flags:
+      - -trimpath
+    gcflags:
+      - all=-l
+    ldflags:
+      - -s -w -X github.com/Norgate-AV/spc/internal/version.Version={{.Version}}
+      - -X github.com/Norgate-AV/spc/internal/version.Commit={{.Commit}}
+      - -X github.com/Norgate-AV/spc/internal/version.Date={{.Date}}
+      - -X github.com/Norgate-AV/spc/internal/version.BuiltBy=goreleaser
+
+archives:
+  - files:
+      - LICENSE*
+      - README*
+      - CHANGELOG*
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+
+signs:
+  - artifacts: checksum
+    args:
+      [
+        "--pinentry-mode",
+        "loopback",
+        "--batch",
+        "-u",
+        "{{ .Env.GPG_FINGERPRINT }}",
+        "--output",
+        "${signature}",
+        "--detach-sign",
+        "${artifact}",
+      ]
+
+source:
+  enabled: true
+
+checksum:
+  name_template: checksums.txt
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  disable: true
+
+release:
+  github:
+    owner: Norgate-AV
+    name: spc
+  draft: false
+  mode: replace
+  footer: |
+    **Full Changelog**: https://github.com/Norgate-AV/spc/compare/{{ .PreviousTag }}...{{ .Tag }}
+
+scoops:
+  - name: spc
+    repository:
+      owner: damienbutt
+      name: scoop-bucket
+      token: "{{ .Env.RELEASE_TOKEN }}"
+    directory: bucket
+    homepage: https://github.com/Norgate-AV/spc
+    description: "CLI wrapper for the Crestron SIMPL+ Compiler"
+    license: MIT
+
+winget:
+  - publisher: damienbutt
+    release_notes_url: "https://github.com/Norgate-AV/spc/releases/tag/{{.Tag}}"
+    license_url: https://github.com/Norgate-AV/spc/blob/main/LICENSE
+    short_description: "CLI wrapper for the Crestron SIMPL+ Compiler"
+    license: MIT
+    repository:
+      owner: "damienbutt"
+      name: winget-pkgs
+      token: "{{ .Env.RELEASE_TOKEN }}"

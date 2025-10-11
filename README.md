@@ -15,6 +15,7 @@ spc [command] [options] <file>
 
 - `-t, --target string`: Target series to compile for (e.g., 3, 34, 234)
 - `-v, --verbose`: Verbose output
+- `--version`: Show version information
 
 ### Examples
 
