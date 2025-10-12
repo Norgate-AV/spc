@@ -30,5 +30,6 @@ func init() {
 	rootCmd.PersistentFlags().BoolP("silent", "s", false, "Suppress console output from the SIMPL+ compiler")
 	rootCmd.PersistentFlags().BoolP("verbose", "v", false, "Verbose output")
 	rootCmd.PersistentFlags().StringP("out", "o", "", "Output file for compilation logs")
+	rootCmd.PersistentFlags().StringSliceP("usersplusfolder", "u", []string{}, "User SIMPL+ folders")
 	rootCmd.AddCommand(buildCmd)
 }

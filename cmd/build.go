@@ -74,8 +74,8 @@ func runBuild(cmd *cobra.Command, args []string) error {
 	// bind flag
 	_ = viper.BindPFlag("target", cmd.Flags().Lookup("target"))
 	_ = viper.BindPFlag("verbose", cmd.Flags().Lookup("verbose"))
-	_ = viper.BindPFlag("silent", cmd.Flags().Lookup("silent"))
 	_ = viper.BindPFlag("out", cmd.Flags().Lookup("out"))
+	_ = viper.BindPFlag("usersplusfolder", cmd.Flags().Lookup("usersplusfolder"))
 	target := viper.GetString("target")
 	if target == "" {
 		return fmt.Errorf("target series not specified")
@@ -92,6 +92,18 @@ func runBuild(cmd *cobra.Command, args []string) error {
 	var cmdArgs []string
 	cmdArgs = append(cmdArgs, "/target")
 	cmdArgs = append(cmdArgs, series...)
+
+	usersPlusFolders := viper.GetStringSlice("usersplusfolder")
+	for _, folder := range usersPlusFolders {
+		if folder != "" {
+			absFolder, err := filepath.Abs(folder)
+			if err != nil {
+				return fmt.Errorf("failed to resolve absolute path for usersplusfolder %s: %w", folder, err)
+			}
+			cmdArgs = append(cmdArgs, "/usersplusfolder", absFolder)
+		}
+	}
+
 	cmdArgs = append(cmdArgs, "/rebuild")
 
 	for _, file := range args {
@@ -118,7 +130,7 @@ func runBuild(cmd *cobra.Command, args []string) error {
 	}
 
 	if verbose {
-		fmt.Printf("Compiler: %s\nTarget: %s\nSeries: %v\nFiles: %v\nOut: %s\nCommand: %s %s\n", compiler, target, series, args, out, compiler, strings.Join(cmdArgs, " "))
+		fmt.Printf("Compiler: %s\nTarget: %s\nSeries: %v\nFiles: %v\nOut: %s\nUsersPlusFolders: %v\nCommand: %s %s\n", compiler, target, series, args, out, usersPlusFolders, compiler, strings.Join(cmdArgs, " "))
 	}
 
 	c := execCommand(compiler, cmdArgs...)
