@@ -1,4 +1,5 @@
 # spc
+
 CLI wrapper for the Crestron SIMPL+ Compiler
 
 ## Usage
@@ -37,6 +38,7 @@ spc --target 3 file1.usp file2.usp
 Supports hierarchical configuration with YAML, JSON, or TOML formats.
 
 Precedence (highest to lowest):
+
 1. CLI options
 2. Local config (`.spc.[yml|json|toml]` in project directory or upwards)
 3. Global config (`%APPDATA%\spc\config.[yml|json|toml]`)
