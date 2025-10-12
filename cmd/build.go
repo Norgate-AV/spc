@@ -10,6 +10,8 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+
+	"github.com/Norgate-AV/spc/internal/codes"
 )
 
 var buildCmd = &cobra.Command{
@@ -72,6 +74,8 @@ func runBuild(cmd *cobra.Command, args []string) error {
 	// bind flag
 	_ = viper.BindPFlag("target", cmd.Flags().Lookup("target"))
 	_ = viper.BindPFlag("verbose", cmd.Flags().Lookup("verbose"))
+	_ = viper.BindPFlag("silent", cmd.Flags().Lookup("silent"))
+	_ = viper.BindPFlag("out", cmd.Flags().Lookup("out"))
 	target := viper.GetString("target")
 	if target == "" {
 		return fmt.Errorf("target series not specified")
@@ -89,7 +93,7 @@ func runBuild(cmd *cobra.Command, args []string) error {
 	cmdArgs = append(cmdArgs, "/target")
 	cmdArgs = append(cmdArgs, series...)
 	cmdArgs = append(cmdArgs, "/rebuild")
-	
+
 	for _, file := range args {
 		absFile, err := filepath.Abs(file)
 		if err != nil {
@@ -99,8 +103,22 @@ func runBuild(cmd *cobra.Command, args []string) error {
 		cmdArgs = append(cmdArgs, absFile)
 	}
 
+	out := viper.GetString("out")
+	if out != "" {
+		absOut, err := filepath.Abs(out)
+		if err != nil {
+			return fmt.Errorf("failed to resolve absolute path for output file: %w", err)
+		}
+		cmdArgs = append(cmdArgs, "/out", absOut)
+	}
+
+	silent := viper.GetBool("silent")
+	if silent {
+		cmdArgs = append(cmdArgs, "/silent")
+	}
+
 	if verbose {
-		fmt.Printf("Compiler: %s\nTarget: %s\nSeries: %v\nFiles: %v\nCommand: %s %s\n", compiler, target, series, args, compiler, strings.Join(cmdArgs, " "))
+		fmt.Printf("Compiler: %s\nTarget: %s\nSeries: %v\nFiles: %v\nOut: %s\nCommand: %s %s\n", compiler, target, series, args, out, compiler, strings.Join(cmdArgs, " "))
 	}
 
 	c := execCommand(compiler, cmdArgs...)
@@ -108,14 +126,18 @@ func runBuild(cmd *cobra.Command, args []string) error {
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 	}
-
 	err = c.Run()
 	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 116 {
-			// Crestron compiler success code
-			return nil
-		}
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			code := exitErr.ExitCode()
+			if codes.IsSuccess(code) {
+				// Crestron compiler success (may have warnings)
+				return nil
+			}
 
+			// Print descriptive error message
+			fmt.Fprintf(os.Stderr, "Compilation failed (exit code %d): %s\n", code, codes.GetErrorMessage(code))
+		}
 		return err
 	}
 

@@ -42,3 +42,6 @@ dist/
 # SIMPL+
 SPlsWork/
 *.ush
+
+# Log files
+*.log
