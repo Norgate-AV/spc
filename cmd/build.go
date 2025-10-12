@@ -11,129 +11,42 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	"github.com/Norgate-AV/spc/internal/codes"
+	"github.com/Norgate-AV/spc/internal/compiler"
+	"github.com/Norgate-AV/spc/internal/config"
 )
 
 var buildCmd = &cobra.Command{
-	Use:          "build",
-	Short:        "Build SIMPL+ program",
-	Long:         `Compile a SIMPL+ program for the specified target series.`,
-	RunE:         runBuild,
+	Use:   "build",
+	Short: "Build SIMPL+ file(s)",
+	Long:  `Build a SIMPL+ file(s) for the specified target series.`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return runBuild(cmd, args)
+	},
 	SilenceUsage: true,
 }
 
 func runBuild(cmd *cobra.Command, args []string) error {
-	if len(args) < 1 {
-		return fmt.Errorf("requires at least one file argument")
+	if len(args) == 0 {
+		return fmt.Errorf("no files specified")
 	}
 
-	// resolve absolute path for the first file to find config
-	firstFile := args[0]
-	absFirstFile, err := filepath.Abs(firstFile)
+	cfg, err := loadBuildConfig(cmd, args)
 	if err != nil {
-		return fmt.Errorf("failed to resolve absolute path: %w", err)
+		return err
 	}
 
-	// check file extension for all files
-	for _, file := range args {
-		if !strings.HasSuffix(file, ".usp") && !strings.HasSuffix(file, ".usl") {
-			return fmt.Errorf("file %s must have .usp or .usl extension", file)
-		}
+	cmdArgs, err := buildCommandArgs(cfg, args)
+	if err != nil {
+		return err
 	}
 
-	// load config
-	viper.SetDefault("compiler_path", `C:\Program Files (x86)\Crestron\Simpl\SPlusCC.exe`)
-	viper.SetDefault("target", "234")
+	series := parseTarget(cfg.Target)
 
-	// global config
-	appdata := os.Getenv("APPDATA")
-	if appdata != "" {
-		globalDir := filepath.Join(appdata, "spc")
-
-		for _, ext := range []string{"yml", "yaml", "json", "toml"} {
-			globalPath := filepath.Join(globalDir, "config."+ext)
-
-			if _, err := os.Stat(globalPath); err == nil {
-				viper.SetConfigFile(globalPath)
-
-				if err := viper.ReadInConfig(); err == nil {
-					break
-				}
-			}
-		}
+	if cfg.Verbose {
+		fmt.Printf("Compiler: %s\nTarget: %s\nSeries: %v\nFiles: %v\nOut: %s\nUsersPlusFolders: %v\nCommand: %s %s\n", cfg.CompilerPath, cfg.Target, series, args, cfg.OutputFile, cfg.UserFolders, cfg.CompilerPath, strings.Join(cmdArgs, " "))
 	}
 
-	// local config
-	dir := filepath.Dir(absFirstFile)
-	localPath := findLocalConfig(dir)
-	if localPath != "" {
-		viper.SetConfigFile(localPath)
-		_ = viper.ReadInConfig()
-	}
-
-	// bind flag
-	_ = viper.BindPFlag("target", cmd.Flags().Lookup("target"))
-	_ = viper.BindPFlag("verbose", cmd.Flags().Lookup("verbose"))
-	_ = viper.BindPFlag("out", cmd.Flags().Lookup("out"))
-	_ = viper.BindPFlag("usersplusfolder", cmd.Flags().Lookup("usersplusfolder"))
-	target := viper.GetString("target")
-	if target == "" {
-		return fmt.Errorf("target series not specified")
-	}
-
-	series := parseTarget(target)
-	if len(series) == 0 {
-		return fmt.Errorf("invalid target series")
-	}
-
-	compiler := viper.GetString("compiler_path")
-	verbose := viper.GetBool("verbose")
-
-	var cmdArgs []string
-	cmdArgs = append(cmdArgs, "/target")
-	cmdArgs = append(cmdArgs, series...)
-
-	usersPlusFolders := viper.GetStringSlice("usersplusfolder")
-	for _, folder := range usersPlusFolders {
-		if folder != "" {
-			absFolder, err := filepath.Abs(folder)
-			if err != nil {
-				return fmt.Errorf("failed to resolve absolute path for usersplusfolder %s: %w", folder, err)
-			}
-			cmdArgs = append(cmdArgs, "/usersplusfolder", absFolder)
-		}
-	}
-
-	cmdArgs = append(cmdArgs, "/rebuild")
-
-	for _, file := range args {
-		absFile, err := filepath.Abs(file)
-		if err != nil {
-			return fmt.Errorf("failed to resolve absolute path for %s: %w", file, err)
-		}
-
-		cmdArgs = append(cmdArgs, absFile)
-	}
-
-	out := viper.GetString("out")
-	if out != "" {
-		absOut, err := filepath.Abs(out)
-		if err != nil {
-			return fmt.Errorf("failed to resolve absolute path for output file: %w", err)
-		}
-		cmdArgs = append(cmdArgs, "/out", absOut)
-	}
-
-	silent := viper.GetBool("silent")
-	if silent {
-		cmdArgs = append(cmdArgs, "/silent")
-	}
-
-	if verbose {
-		fmt.Printf("Compiler: %s\nTarget: %s\nSeries: %v\nFiles: %v\nOut: %s\nUsersPlusFolders: %v\nCommand: %s %s\n", compiler, target, series, args, out, usersPlusFolders, compiler, strings.Join(cmdArgs, " "))
-	}
-
-	c := execCommand(compiler, cmdArgs...)
+	c := execCommand(cfg.CompilerPath, cmdArgs...)
 	if cmd, ok := c.(*exec.Cmd); ok {
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
@@ -143,7 +56,7 @@ func runBuild(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			code := exitErr.ExitCode()
-			if codes.IsSuccess(code) {
+			if compiler.IsSuccess(code) {
 				// Crestron compiler success (may have warnings)
 				return nil
 			}
@@ -151,11 +64,49 @@ func runBuild(cmd *cobra.Command, args []string) error {
 			// Print descriptive error message
 			fmt.Fprintf(os.Stderr, "Compilation failed (exit code %d): %s\n", code, codes.GetErrorMessage(code))
 		}
-		
+
 		return err
 	}
 
 	return nil
+}
+
+func buildCommandArgs(cfg *config.Config, files []string) ([]string, error) {
+	series := parseTarget(cfg.Target)
+	if len(series) == 0 {
+		return nil, fmt.Errorf("invalid target series")
+	}
+
+	var cmdArgs []string
+	cmdArgs = append(cmdArgs, "/target")
+	cmdArgs = append(cmdArgs, series...)
+
+	for _, folder := range cfg.UserFolders {
+		if folder != "" {
+			cmdArgs = append(cmdArgs, "/usersplusfolder", folder)
+		}
+	}
+
+	cmdArgs = append(cmdArgs, "/rebuild")
+
+	for _, file := range files {
+		absFile, err := filepath.Abs(file)
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve absolute path for %s: %w", file, err)
+		}
+
+		cmdArgs = append(cmdArgs, absFile)
+	}
+
+	if cfg.OutputFile != "" {
+		cmdArgs = append(cmdArgs, "/out", cfg.OutputFile)
+	}
+
+	if cfg.Silent {
+		cmdArgs = append(cmdArgs, "/silent")
+	}
+
+	return cmdArgs, nil
 }
 
 func parseTarget(t string) []string {
@@ -189,6 +140,55 @@ func findLocalConfig(dir string) string {
 	}
 
 	return ""
+}
+
+func loadBuildConfig(cmd *cobra.Command, args []string) (*config.Config, error) {
+	// Set defaults
+	viper.SetDefault("compiler_path", "C:/Program Files (x86)/Crestron/Simpl/SPlusCC.exe")
+	viper.SetDefault("target", "234")
+	viper.SetDefault("silent", false)
+	viper.SetDefault("verbose", false)
+
+	// global config
+	appdata := os.Getenv("APPDATA")
+	if appdata != "" {
+		globalDir := filepath.Join(appdata, "spc")
+
+		for _, ext := range []string{"yml", "yaml", "json", "toml"} {
+			globalPath := filepath.Join(globalDir, "config."+ext)
+
+			if _, err := os.Stat(globalPath); err == nil {
+				viper.SetConfigFile(globalPath)
+
+				if err := viper.ReadInConfig(); err == nil {
+					break
+				}
+			}
+		}
+	}
+
+	// local config
+	if len(args) > 0 {
+		absFirstFile, err := filepath.Abs(args[0])
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve absolute path for first file: %w", err)
+		}
+
+		dir := filepath.Dir(absFirstFile)
+		localPath := findLocalConfig(dir)
+		if localPath != "" {
+			viper.SetConfigFile(localPath)
+			_ = viper.ReadInConfig()
+		}
+	}
+
+	// bind flags
+	_ = viper.BindPFlag("target", cmd.Flags().Lookup("target"))
+	_ = viper.BindPFlag("verbose", cmd.Flags().Lookup("verbose"))
+	_ = viper.BindPFlag("out", cmd.Flags().Lookup("out"))
+	_ = viper.BindPFlag("usersplusfolder", cmd.Flags().Lookup("usersplusfolder"))
+
+	return config.Load()
 }
 
 var execCommand = func(name string, args ...string) Commander {

@@ -1,4 +1,4 @@
-package codes
+package compiler
 
 // ErrorCodes maps Crestron SIMPL+ compiler exit codes to their descriptions
 var ErrorCodes = map[int]string{

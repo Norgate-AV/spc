@@ -10,8 +10,8 @@ import (
 
 var rootCmd = &cobra.Command{
 	Use:          "spc",
-	Short:        "Crestron SIMPL+ compiler wrapper",
-	Long:         `A CLI wrapper for the Crestron SIMPL+ compiler`,
+	Short:        "Better SIMPL+ Compiler",
+	Long:         `A better way to compile Crestron SIMPL+ files`,
 	RunE:         runBuild,
 	SilenceUsage: true,
 	Args:         cobra.ArbitraryArgs,
