@@ -66,12 +66,12 @@ func runBuild(cmd *cobra.Command, args []string) error {
 	localPath := findLocalConfig(dir)
 	if localPath != "" {
 		viper.SetConfigFile(localPath)
-		viper.ReadInConfig()
+		_ = viper.ReadInConfig()
 	}
 
 	// bind flag
-	viper.BindPFlag("target", cmd.Flags().Lookup("target"))
-	viper.BindPFlag("verbose", cmd.Flags().Lookup("verbose"))
+	_ = viper.BindPFlag("target", cmd.Flags().Lookup("target"))
+	_ = viper.BindPFlag("verbose", cmd.Flags().Lookup("verbose"))
 	target := viper.GetString("target")
 	if target == "" {
 		return fmt.Errorf("target series not specified")
@@ -87,12 +87,9 @@ func runBuild(cmd *cobra.Command, args []string) error {
 
 	var cmdArgs []string
 	cmdArgs = append(cmdArgs, "/target")
-
-	for _, s := range series {
-		cmdArgs = append(cmdArgs, s)
-	}
-
+	cmdArgs = append(cmdArgs, series...)
 	cmdArgs = append(cmdArgs, "/rebuild")
+	
 	for _, file := range args {
 		absFile, err := filepath.Abs(file)
 		if err != nil {
