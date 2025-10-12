@@ -138,6 +138,7 @@ func runBuild(cmd *cobra.Command, args []string) error {
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 	}
+
 	err = c.Run()
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
@@ -150,6 +151,7 @@ func runBuild(cmd *cobra.Command, args []string) error {
 			// Print descriptive error message
 			fmt.Fprintf(os.Stderr, "Compilation failed (exit code %d): %s\n", code, codes.GetErrorMessage(code))
 		}
+		
 		return err
 	}
 
