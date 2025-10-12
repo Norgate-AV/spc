@@ -6,8 +6,8 @@
 # See documentation for more information on available options.
 
 [remote.github]
-owner = "damienbutt"
-repo = "emojify-go"
+owner = "Norgate-AV"
+repo = "spc"
 
 [changelog]
 # template for the changelog header
@@ -56,7 +56,7 @@ body = """
 
 ### 🎉🎉 Initial Release
 
-First official release of emojify-go, a lighting fast Emoji converter for the command line 😱.
+First official release of spc, a CLI wrapper for the Crestron SIMPL+ compiler.
 {%- endif %}
 
 {%- if github %}
@@ -86,7 +86,7 @@ footer = """
 trim = true
 # postprocessors
 postprocessors = [
-    { pattern = '<REPO>', replace = "https://github.com/damienbutt/emojify-go" }, # replace repository URL
+    { pattern = '<REPO>', replace = "https://github.com/Norgate-AV/spc" }, # replace repository URL
 ]
 # render body even when there are no releases to process
 # render_always = true

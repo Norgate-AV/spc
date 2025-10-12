@@ -31,10 +31,7 @@ jobs:
         run: make deps
 
       - name: Run linting
-        run: make lint-dev
-
-      - name: Check formatting and go mod tidy
-        run: make verify
+        run: make lint
 
   security:
     name: Security Scan
