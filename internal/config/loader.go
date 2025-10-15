@@ -30,10 +30,10 @@ func (l *Loader) LoadForBuild(cmd *cobra.Command, args []string) (*Config, error
 
 // setupViperDefaults sets up default values for viper
 func (l *Loader) setupViperDefaults() {
-	viper.SetDefault("compiler_path", "C:/Program Files (x86)/Crestron/Simpl/SPlusCC.exe")
-	viper.SetDefault("target", "234")
-	viper.SetDefault("silent", false)
-	viper.SetDefault("verbose", false)
+	viper.SetDefault("compiler_path", DefaultCompilerPath)
+	viper.SetDefault("target", DefaultTarget)
+	viper.SetDefault("silent", DefaultSilent)
+	viper.SetDefault("verbose", DefaultVerbose)
 }
 
 // loadGlobalConfig loads global configuration from APPDATA

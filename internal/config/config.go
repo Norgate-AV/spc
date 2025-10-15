@@ -9,6 +9,14 @@ import (
 	"github.com/spf13/viper"
 )
 
+// Default configuration values
+const (
+	DefaultCompilerPath = "C:/Program Files (x86)/Crestron/Simpl/SPlusCC.exe"
+	DefaultTarget       = "234"
+	DefaultSilent       = false
+	DefaultVerbose      = false
+)
+
 // Holds the configuration options for spc
 type Config struct {
 	// Path to the Crestron SIMPL+ compiler
@@ -45,12 +53,12 @@ func Load() (*Config, error) {
 	// Apply defaults if not set
 	if cfg.CompilerPath == "" {
 		if runtime.GOOS != "windows" {
-			cfg.CompilerPath = "C:/Program Files (x86)/Crestron/Simpl/SPlusCC.exe"
+			cfg.CompilerPath = DefaultCompilerPath
 		}
 	}
 
 	if cfg.Target == "" {
-		cfg.Target = "234"
+		cfg.Target = DefaultTarget
 	}
 
 	// Validate required fields

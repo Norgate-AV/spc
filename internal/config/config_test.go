@@ -21,18 +21,18 @@ func TestLoad(t *testing.T) {
 			name: "load with all defaults",
 			setupViper: func() {
 				viper.Reset()
-				viper.SetDefault("compiler_path", "C:/Program Files (x86)/Crestron/Simpl/SPlusCC.exe")
-				viper.SetDefault("target", "234")
-				viper.SetDefault("silent", false)
-				viper.SetDefault("verbose", false)
+				viper.SetDefault("compiler_path", DefaultCompilerPath)
+				viper.SetDefault("target", DefaultTarget)
+				viper.SetDefault("silent", DefaultSilent)
+				viper.SetDefault("verbose", DefaultVerbose)
 			},
 			wantConfig: &Config{
 				CompilerPath: func() string {
-					abs, _ := filepath.Abs("C:/Program Files (x86)/Crestron/Simpl/SPlusCC.exe")
+					abs, _ := filepath.Abs(DefaultCompilerPath)
 					return abs
 				}(),
-				Target:      "234",
-				Silent:      false,
+				Target:      DefaultTarget,
+				Silent:      DefaultSilent,
 				Verbose:     false,
 				UserFolders: nil, // Changed from []string{} to nil
 			},

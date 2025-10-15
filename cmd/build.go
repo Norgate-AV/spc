@@ -1,7 +1,11 @@
 package cmd
 
 import (
-	"github.com/Norgate-AV/spc/internal/build"
+	"fmt"
+
+	"github.com/Norgate-AV/spc/internal/compiler"
+	"github.com/Norgate-AV/spc/internal/config"
+	"github.com/Norgate-AV/spc/internal/utils"
 	"github.com/spf13/cobra"
 )
 
@@ -14,22 +18,30 @@ var buildCmd = &cobra.Command{
 }
 
 func runBuild(cmd *cobra.Command, args []string) error {
-	service := build.NewBuildService()
-	return service.Build(cmd, args)
+	if len(args) == 0 {
+		return fmt.Errorf("no files specified")
+	}
 
-	// Resolve config
-	// cfg, err := config.Load()
-	// if err != nil {
-	// 	return fmt.Errorf("error loading config: %w", err)
-	// }
+	// Load and validate configuration
+	configLoader := config.NewLoader()
+	cfg, err := configLoader.LoadForBuild(cmd, args)
+	if err != nil {
+		return err
+	}
 
-	// fmt.Printf("%+v\n", cfg)
-	// fmt.Printf("%+v\n", args)
+	// Build compiler command arguments
+	builder := compiler.NewCommandBuilder()
+	cmdArgs, err := builder.BuildCommandArgs(cfg, args)
+	if err != nil {
+		return err
+	}
 
-	// Validate input
-	// if len(args) == 0 {
-	// 	return cmd.Help()
-	// }
+	// Print build info if verbose mode is enabled
+	if cfg.Verbose {
+		series := utils.ParseTarget(cfg.Target)
+		builder.PrintBuildInfo(cfg, series, args, cmdArgs)
+	}
 
-	// return nil
+	// Execute the compiler command
+	return builder.ExecuteCommand(cfg.CompilerPath, cmdArgs)
 }
