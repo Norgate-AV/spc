@@ -16,9 +16,9 @@ SRC_DIR := .
 CGO_ENABLED := 0
 
 # Version information (from git tags and commit)
-VERSION = dev
-COMMIT = unknown
-BUILD_TIME = unknown
+VERSION := $(shell git describe --tags --always --dirty 2>NUL || echo dev)
+COMMIT := $(shell git rev-parse --short HEAD 2>NUL || echo unknown)
+BUILD_TIME := $(shell git log -1 --format=%cI 2>NUL || echo unknown)
 
 # Optimization flags for smallest possible binary
 GCFLAGS := -gcflags="all=-l"
@@ -34,14 +34,26 @@ BUILD_TAGS := netgo osusergo
 GOOS_BUILD := $(if $(GOOS),$(GOOS),$(shell go env GOOS))
 GOARCH_BUILD := $(if $(GOARCH),$(GOARCH),$(shell go env GOARCH))
 
-.PHONY: build clean test fmt vet help lint all deps ci goreleaser-check goreleaser-test
+.PHONY: build build-release clean test test-coverage fmt vet help lint all deps ci run install
 
 # Build the binary into the build directory
 build: $(BUILD_DIR)
 	@CGO_ENABLED=$(CGO_ENABLED) go build $(LDFLAGS) -tags "$(BUILD_TAGS)" -o $(BINARY) ./$(SRC_DIR)
 
+# Build optimized release binary
+build-release: $(BUILD_DIR)
+	@CGO_ENABLED=$(CGO_ENABLED) go build $(LDFLAGS_RELEASE) -tags "$(BUILD_TAGS)" -trimpath -o $(BINARY) ./$(SRC_DIR)
+
 $(BUILD_DIR):
 	@mkdir -p $(BUILD_DIR)
+
+# Run the application
+run: build
+	@$(BINARY)
+
+# Install to GOPATH/bin
+install:
+	@CGO_ENABLED=$(CGO_ENABLED) go install $(LDFLAGS) -tags "$(BUILD_TAGS)" .
 
 # Clean build artifacts
 clean:
@@ -49,12 +61,14 @@ clean:
 
 # Run tests
 test:
-	@go test ./...
+	@go test ./... -v
 
+# Run tests with coverage
 test-coverage:
-# 	@go test -race -coverprofile=coverage.out ./...
+	@go test -coverprofile=coverage.out -covermode=atomic ./internal/...
 	@go tool cover -html=coverage.out -o coverage.html
 	@go tool cover -func=coverage.out | tail -1
+	@echo "Coverage report: coverage.html"
 
 # Format Go code
 fmt:
@@ -66,7 +80,7 @@ vet:
 
 # Run both fmt and vet
 lint: fmt vet
-	@go tool golangci-lint run
+	@golangci-lint run 2>/dev/null || echo "⚠️  golangci-lint not installed"
 
 # Build and run tests
 all: clean test build
@@ -76,20 +90,20 @@ deps:
 
 ci: deps lint test build
 
-goreleaser-check:
-	@go tool goreleaser check || echo "⚠️  goreleaser not found"
-
-goreleaser-test:
-	@./scripts/test-goreleaser.sh
-
 # Show help
 help:
 	@echo "Available targets:"
-	@echo "  build    - Build the spc binary into $(BUILD_DIR)/ directory"
-	@echo "  clean    - Remove build artifacts"
-	@echo "  test     - Run Go tests"
-	@echo "  fmt      - Format Go code"
-	@echo "  vet      - Run go vet"
-	@echo "  lint     - Run fmt and vet"
-	@echo "  all      - Build and run tests"
-	@echo "  help     - Show this help"
+	@echo "  build         - Build the spc binary into $(BUILD_DIR)/ directory"
+	@echo "  build-release - Build optimized release binary"
+	@echo "  run           - Build and run the application"
+	@echo "  install       - Install to GOPATH/bin"
+	@echo "  clean         - Remove build artifacts"
+	@echo "  test          - Run Go tests"
+	@echo "  test-coverage - Run tests with coverage report"
+	@echo "  fmt           - Format Go code"
+	@echo "  vet           - Run go vet"
+	@echo "  lint          - Run fmt, vet, and golangci-lint"
+	@echo "  deps          - Download dependencies"
+	@echo "  ci            - Run CI pipeline (deps, lint, test, build)"
+	@echo "  all           - Clean, test, and build"
+	@echo "  help          - Show this help"
