@@ -1,6 +1,6 @@
 # Makefile for spc - Crestron SIMPL+ Compiler Wrapper
 
-SHELL = /bin/bash
+SHELL := C:/Program Files/Git/usr/bin/bash.exe
 
 # Variables
 APP_NAME := spc.exe
@@ -11,6 +11,7 @@ BINARY = $(BUILD_DIR)/$(APP_NAME)
 # Build configuration
 DIST_DIR := dist
 SRC_DIR := .
+COVERAGE_DIR := .coverage
 
 # Go build settings
 CGO_ENABLED := 0
@@ -57,7 +58,8 @@ install:
 
 # Clean build artifacts
 clean:
-	@rm -rf $(BUILD_DIR) $(DIST_DIR) coverage.out coverage.html
+	@rm -rf $(BUILD_DIR) $(DIST_DIR) $(COVERAGE_DIR)
+	@rm -f coverage.out coverage.html
 
 # Run tests
 test:
@@ -65,10 +67,11 @@ test:
 
 # Run tests with coverage
 test-coverage:
-	@go test -coverprofile=coverage.out -covermode=atomic ./internal/...
-	@go tool cover -html=coverage.out -o coverage.html
-	@go tool cover -func=coverage.out | tail -1
-	@echo "Coverage report: coverage.html"
+	@mkdir -p $(COVERAGE_DIR)
+	@go test -coverprofile=$(COVERAGE_DIR)/coverage.out -covermode=atomic ./internal/...
+	@go tool cover -html=$(COVERAGE_DIR)/coverage.out -o $(COVERAGE_DIR)/coverage.html
+	@go tool cover -func=$(COVERAGE_DIR)/coverage.out | tail -1
+	@echo "Coverage report: $(COVERAGE_DIR)/coverage.html"
 
 # Format Go code
 fmt:
