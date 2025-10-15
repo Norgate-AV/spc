@@ -1,6 +1,11 @@
 # Makefile for spc - Crestron SIMPL+ Compiler Wrapper
 
-SHELL := C:/Program Files/Git/usr/bin/bash.exe
+# Detect OS and set shell accordingly
+ifeq ($(OS),Windows_NT)
+	SHELL := C:/Program Files/Git/usr/bin/bash.exe
+else
+	SHELL := /bin/bash
+endif
 
 # Variables
 APP_NAME := spc.exe
