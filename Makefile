@@ -17,9 +17,9 @@ COVERAGE_DIR := .coverage
 CGO_ENABLED := 0
 
 # Version information (from git tags and commit)
-VERSION := $(shell git describe --tags --always --dirty 2>NUL || echo dev)
-COMMIT := $(shell git rev-parse --short HEAD 2>NUL || echo unknown)
-BUILD_TIME := $(shell git log -1 --format=%cI 2>NUL || echo unknown)
+VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
+BUILD_TIME := $(shell git log -1 --format=%cI 2>/dev/null || echo unknown)
 
 # Optimization flags for smallest possible binary
 GCFLAGS := -gcflags="all=-l"
