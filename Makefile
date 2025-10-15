@@ -59,7 +59,6 @@ install:
 # Clean build artifacts
 clean:
 	@rm -rf $(BUILD_DIR) $(DIST_DIR) $(COVERAGE_DIR)
-	@rm -f coverage.out coverage.html
 
 # Run tests
 test:
