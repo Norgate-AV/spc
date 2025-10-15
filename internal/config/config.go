@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"path/filepath"
 	"runtime"
-	"strconv"
 
+	"github.com/Norgate-AV/spc/internal/utils"
 	"github.com/spf13/viper"
 )
 
@@ -16,6 +16,8 @@ type Config struct {
 
 	// Compilation target series (e.g., 2, 23, 234)
 	Target string
+	// Parsed target series
+	Series []string
 
 	// User SIMPL+ folders
 	UserFolders []string
@@ -95,18 +97,6 @@ func (c *Config) Validate() error {
 }
 
 func isValidTarget(target string) bool {
-	series := parseTarget(target)
+	series := utils.ParseTarget(target)
 	return len(series) > 0
-}
-
-func parseTarget(t string) []string {
-	series := make([]string, 0)
-
-	for _, r := range t {
-		if s := int(r - '0'); s >= 2 && s <= 4 {
-			series = append(series, "series"+strconv.Itoa(s))
-		}
-	}
-
-	return series
 }

@@ -1,4 +1,4 @@
-package cmd
+package utils
 
 import (
 	"os"
@@ -25,8 +25,8 @@ func TestParseTarget(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		result := parseTarget(test.input)
-		assert.Equal(t, test.expected, result, "parseTarget(%q)", test.input)
+		result := ParseTarget(test.input)
+		assert.Equal(t, test.expected, result, "ParseTarget(%q)", test.input)
 	}
 }
 
@@ -43,40 +43,14 @@ func TestFindLocalConfig(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Test finding in subdir
-	result := findLocalConfig(subDir)
+	result := FindLocalConfig(subDir)
 	assert.Equal(t, configYML, result)
 
 	// Test finding in parent
-	result = findLocalConfig(filepath.Join(subDir, "deep"))
+	result = FindLocalConfig(filepath.Join(subDir, "deep"))
 	assert.Equal(t, configYML, result)
 
 	// Test not found
-	result = findLocalConfig(tempDir)
+	result = FindLocalConfig(tempDir)
 	assert.Equal(t, "", result)
-}
-
-func TestRunBuild(t *testing.T) {
-	// Mock execCommand
-	originalExec := execCommand
-	defer func() { execCommand = originalExec }()
-
-	execCommand = func(name string, args ...string) Commander {
-		// Mock command that succeeds
-		return &mockCmd{}
-	}
-
-	// Create a temporary file
-	tempFile := filepath.Join(t.TempDir(), "test.usp")
-	err := os.WriteFile(tempFile, []byte("// test"), 0o644)
-	assert.NoError(t, err)
-
-	// Test with target flag - simplified test
-	// Note: Full integration test would require mocking viper and cobra
-	assert.True(t, true) // Placeholder
-}
-
-type mockCmd struct{}
-
-func (m *mockCmd) Run() error {
-	return nil
 }

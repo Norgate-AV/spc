@@ -6,6 +6,7 @@ import (
 
 	"github.com/Norgate-AV/spc/internal/version"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 var rootCmd = &cobra.Command{
@@ -32,4 +33,9 @@ func init() {
 	rootCmd.PersistentFlags().StringP("out", "o", "", "Output file for compilation logs")
 	rootCmd.PersistentFlags().StringSliceP("usersplusfolder", "u", []string{}, "User SIMPL+ folders")
 	rootCmd.AddCommand(buildCmd)
+
+	viper.SetDefault("compiler_path", "C:/Program Files (x86)/Crestron/Simpl/SPlusCC.exe")
+	viper.SetDefault("target", "234")
+	viper.SetDefault("silent", false)
+	viper.SetDefault("verbose", false)
 }
