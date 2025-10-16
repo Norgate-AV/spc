@@ -6,8 +6,6 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-
-	"github.com/Norgate-AV/spc/internal/utils"
 )
 
 // Loader handles configuration loading from various sources
@@ -65,7 +63,7 @@ func (l *Loader) loadLocalConfig(args []string) {
 		}
 
 		dir := filepath.Dir(absFirstFile)
-		localPath := utils.FindLocalConfig(dir)
+		localPath := FindLocalConfig(dir)
 		if localPath != "" {
 			viper.SetConfigFile(localPath)
 			_ = viper.ReadInConfig()

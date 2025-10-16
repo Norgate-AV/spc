@@ -82,14 +82,3 @@ scoops:
     homepage: https://github.com/Norgate-AV/spc
     description: "CLI wrapper for the Crestron SIMPL+ Compiler"
     license: MIT
-
-winget:
-  - publisher: damienbutt
-    release_notes_url: "https://github.com/Norgate-AV/spc/releases/tag/{{.Tag}}"
-    license_url: https://github.com/Norgate-AV/spc/blob/main/LICENSE
-    short_description: "CLI wrapper for the Crestron SIMPL+ Compiler"
-    license: MIT
-    repository:
-      owner: "damienbutt"
-      name: winget-pkgs
-      token: "{{ .Env.RELEASE_TOKEN }}"
