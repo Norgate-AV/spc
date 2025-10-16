@@ -1,11 +1,11 @@
 # spc
 
-CLI wrapper for the Crestron SIMPL+ Compiler
+A better way to compile SIMPL+ files.
 
 ## Usage
 
 ```bash
-spc [command] [options] <file> [file...]
+spc [command] [options] <file...>
 ```
 
 ### Commands
@@ -44,9 +44,34 @@ Precedence (highest to lowest):
 3. Global config (`%APPDATA%\spc\config.[yml|json|toml]`)
 4. Defaults
 
-### Config File Example (YAML)
+### Config File Example
 
 ```yaml
-compiler_path: "C:\\Program Files (x86)\\Crestron\\Simpl\\SPlusCC.exe"
+compiler_path: "C:/Program Files (x86)/Crestron/Simpl/SPlusCC.exe"
 target: "4"
+out: "build.log"
+usersplusfolder:
+  - "C:/MyCustomSimplPlus"
+silent: false
+verbose: false
+```
+
+```json
+{
+    "compiler_path": "C:/Program Files (x86)/Crestron/Simpl/SPlusCC.exe",
+    "target": "4",
+    "out": "build.log",
+    "usersplusfolder": ["C:/MyCustomSimplPlus"],
+    "silent": false,
+    "verbose": false
+}
+```
+
+```toml
+compiler_path = "C:/Program Files (x86)/Crestron/Simpl/SPlusCC.exe"
+target = "4"
+out = "build.log"
+usersplusfolder = ["C:/MyCustomSimplPlus"]
+silent = false
+verbose = false
 ```
