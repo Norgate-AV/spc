@@ -1,3 +1,16 @@
+// Package cache provides build caching functionality for SIMPL+ compilation.
+//
+// The cache system addresses the challenge of shared output directories (SPlsWork)
+// where the Crestron compiler places artifacts from multiple source files together.
+// Rather than caching entire directories, the cache:
+//
+//  1. Filters artifacts by source file name (e.g., example1.dll, S2_example1.c)
+//  2. Stores only relevant artifacts per source file in separate cache entries
+//  3. Uses SHA256 hashing of source content + configuration for cache keys
+//  4. Stores metadata in BoltDB and artifacts in the filesystem
+//
+// This allows incremental compilation where each source file can be cached
+// and restored independently, even when multiple files share the same output directory.
 package cache
 
 import (
@@ -106,14 +119,14 @@ func (c *Cache) Get(sourceFile string, cfg *config.Config) (*Entry, error) {
 }
 
 // Store saves a cache entry and copies artifacts
-func (c *Cache) Store(sourceFile string, cfg *config.Config, outputDir string, success bool) error {
+func (c *Cache) Store(sourceFile string, cfg *config.Config, success bool) error {
 	hash, err := HashSource(sourceFile, cfg)
 	if err != nil {
 		return fmt.Errorf("failed to hash source: %w", err)
 	}
 
-	// Collect outputs from build directory
-	outputs, err := CollectOutputs(outputDir)
+	// Collect outputs from both source dir and SPlsWork dir
+	outputs, err := CollectOutputs(sourceFile)
 	if err != nil {
 		return fmt.Errorf("failed to collect outputs: %w", err)
 	}
@@ -145,10 +158,11 @@ func (c *Cache) Store(sourceFile string, cfg *config.Config, outputDir string, s
 		return fmt.Errorf("failed to store cache entry: %w", err)
 	}
 
-	// Copy artifacts to cache
+	// Copy artifacts to cache (outputs are relative to source directory)
 	if success && len(outputs) > 0 {
 		artifactDir := c.artifactDir(hash)
-		if err := CopyArtifacts(outputDir, artifactDir, outputs); err != nil {
+		sourceDir := filepath.Dir(sourceFile)
+		if err := CopyArtifacts(sourceDir, artifactDir, outputs); err != nil {
 			return fmt.Errorf("failed to copy artifacts: %w", err)
 		}
 	}
@@ -156,7 +170,7 @@ func (c *Cache) Store(sourceFile string, cfg *config.Config, outputDir string, s
 	return nil
 }
 
-// Restore copies cached artifacts back to the output directory
+// Restore copies cached artifacts back to the source directory
 func (c *Cache) Restore(entry *Entry, destDir string) error {
 	if !entry.Success || len(entry.Outputs) == 0 {
 		return fmt.Errorf("cannot restore failed build or build with no outputs")

@@ -61,9 +61,9 @@ func runBuild(cmd *cobra.Command, args []string) error {
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Warning: Cache lookup failed: %v\n", err)
 			} else if entry != nil && entry.Success {
-				// Cache hit!
-				outputDir := getOutputDir(absFile)
-				if err := buildCache.Restore(entry, outputDir); err != nil {
+				// Cache hit! Restore to source directory
+				sourceDir := filepath.Dir(absFile)
+				if err := buildCache.Restore(entry, sourceDir); err != nil {
 					fmt.Fprintf(os.Stderr, "Warning: Failed to restore from cache: %v\n", err)
 				} else {
 					if cfg.Verbose {
@@ -84,16 +84,14 @@ func runBuild(cmd *cobra.Command, args []string) error {
 			success = false
 			// Store failed build in cache too (so we don't retry immediately)
 			if !noCache && buildCache != nil {
-				outputDir := getOutputDir(absFile)
-				_ = buildCache.Store(absFile, cfg, outputDir, false)
+				_ = buildCache.Store(absFile, cfg, false)
 			}
 			return err
 		}
 
 		// Store successful build in cache
 		if !noCache && buildCache != nil {
-			outputDir := getOutputDir(absFile)
-			if err := buildCache.Store(absFile, cfg, outputDir, success); err != nil {
+			if err := buildCache.Store(absFile, cfg, success); err != nil {
 				fmt.Fprintf(os.Stderr, "Warning: Failed to cache build: %v\n", err)
 			}
 		}
@@ -118,10 +116,4 @@ func compileSingle(cfg *config.Config, sourceFile string) error {
 
 	// Execute the compiler command
 	return builder.ExecuteCommand(cfg.CompilerPath, cmdArgs)
-}
-
-// getOutputDir returns the SPlsWork directory for a source file
-func getOutputDir(sourceFile string) string {
-	dir := filepath.Dir(sourceFile)
-	return filepath.Join(dir, "SPlsWork")
 }

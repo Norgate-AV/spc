@@ -65,21 +65,116 @@ func TestHashSource(t *testing.T) {
 	assert.Equal(t, hash1, hash5, "User folders should be sorted, order shouldn't matter")
 }
 
+func TestCollectOutputs_Filtering(t *testing.T) {
+	sourceDir := t.TempDir()
+	sourceFile := filepath.Join(sourceDir, "example1.usp")
+	splsWorkDir := filepath.Join(sourceDir, "SPlsWork")
+
+	// Create source file
+	err := os.WriteFile(sourceFile, []byte("test"), 0o644)
+	require.NoError(t, err)
+
+	// Create SPlsWork directory
+	err = os.MkdirAll(splsWorkDir, 0o755)
+	require.NoError(t, err)
+
+	// Create output files for multiple source files (simulating shared SPlsWork)
+	splsWorkFiles := []string{
+		// Files for example1.usp (should be collected)
+		"example1.dll",
+		"example1.cs",
+		"example1.inf",
+		"S2_example1.c",
+		"S2_example1.h",
+		"S2_example1.elf",
+		"S2_example1.map",
+		"S2_example1.o",
+		"S2_example1.spl",
+		// Files for example2.usp (should NOT be collected)
+		"example2.dll",
+		"example2.cs",
+		"S2_example2.c",
+		"S2_example2.h",
+		// Shared library files (should NOT be collected)
+		"Version.ini",
+		"ManagedUtilities.dll",
+		"SplusLibrary.dll",
+	}
+
+	for _, file := range splsWorkFiles {
+		path := filepath.Join(splsWorkDir, file)
+		err := os.WriteFile(path, []byte("content"), 0o644)
+		require.NoError(t, err)
+	}
+
+	// Create .ush file adjacent to source
+	ushFile := filepath.Join(sourceDir, "example1.ush")
+	err = os.WriteFile(ushFile, []byte("header"), 0o644)
+	require.NoError(t, err)
+
+	// Collect outputs for example1.usp
+	outputs, err := CollectOutputs(sourceFile)
+	require.NoError(t, err)
+
+	// Should collect: 1 .ush file + 9 SPlsWork files = 10 total
+	expectedCount := 10
+	assert.Len(t, outputs, expectedCount, "Should collect .ush + SPlsWork files for example1.usp")
+
+	// Verify correct files are included
+	outputMap := make(map[string]bool)
+	for _, output := range outputs {
+		outputMap[output] = true
+	}
+
+	// Check .ush file (no prefix)
+	assert.True(t, outputMap["example1.ush"], "Should include example1.ush")
+
+	// Check SPlsWork files (with SPlsWork/ prefix)
+	assert.True(t, outputMap[filepath.Join("SPlsWork", "example1.dll")], "Should include SPlsWork/example1.dll")
+	assert.True(t, outputMap[filepath.Join("SPlsWork", "example1.cs")], "Should include SPlsWork/example1.cs")
+	assert.True(t, outputMap[filepath.Join("SPlsWork", "S2_example1.c")], "Should include SPlsWork/S2_example1.c")
+	assert.True(t, outputMap[filepath.Join("SPlsWork", "S2_example1.h")], "Should include SPlsWork/S2_example1.h")
+
+	// Verify incorrect files are excluded
+	assert.False(t, outputMap[filepath.Join("SPlsWork", "example2.dll")], "Should NOT include example2.dll")
+	assert.False(t, outputMap[filepath.Join("SPlsWork", "S2_example2.c")], "Should NOT include S2_example2.c")
+	assert.False(t, outputMap[filepath.Join("SPlsWork", "Version.ini")], "Should NOT include shared library files")
+	assert.False(t, outputMap[filepath.Join("SPlsWork", "ManagedUtilities.dll")], "Should NOT include shared library files")
+}
+
 func TestCache_StoreAndGet(t *testing.T) {
 	// Create temp directories
 	cacheDir := t.TempDir()
-	outputDir := t.TempDir()
-	sourceFile := filepath.Join(t.TempDir(), "test.usp")
+	sourceDir := t.TempDir()
+	sourceFile := filepath.Join(sourceDir, "test.usp")
+	splsWorkDir := filepath.Join(sourceDir, "SPlsWork")
 
 	// Create source file
 	err := os.WriteFile(sourceFile, []byte("test source"), 0o644)
 	require.NoError(t, err)
 
-	// Create fake output files
-	outputs := []string{"test.dll", "test.elf", "test.h"}
-	for _, output := range outputs {
-		path := filepath.Join(outputDir, output)
+	// Create SPlsWork directory
+	err = os.MkdirAll(splsWorkDir, 0o755)
+	require.NoError(t, err)
+
+	// Create fake output files matching the source file name in SPlsWork
+	splsWorkOutputs := []string{"test.dll", "S2_test.elf", "S2_test.h"}
+	for _, output := range splsWorkOutputs {
+		path := filepath.Join(splsWorkDir, output)
 		err := os.WriteFile(path, []byte("output content"), 0o644)
+		require.NoError(t, err)
+	}
+
+	// Create .ush file adjacent to source
+	ushFile := filepath.Join(sourceDir, "test.ush")
+	err = os.WriteFile(ushFile, []byte("header content"), 0o644)
+	require.NoError(t, err)
+
+	// Create some unrelated files in SPlsWork (should be filtered out)
+	unrelatedFiles := []string{"other.dll", "Version.ini"}
+	for _, output := range unrelatedFiles {
+		path := filepath.Join(splsWorkDir, output)
+		err := os.WriteFile(path, []byte("unrelated content"), 0o644)
 		require.NoError(t, err)
 	}
 
@@ -99,7 +194,7 @@ func TestCache_StoreAndGet(t *testing.T) {
 	assert.Nil(t, entry, "Should be cache miss initially")
 
 	// Store in cache
-	err = cache.Store(sourceFile, cfg, outputDir, true)
+	err = cache.Store(sourceFile, cfg, true)
 	require.NoError(t, err)
 
 	// Cache hit now
@@ -110,35 +205,56 @@ func TestCache_StoreAndGet(t *testing.T) {
 	assert.Equal(t, sourceFile, entry.SourceFile)
 	assert.Equal(t, "234", entry.Target)
 	assert.True(t, entry.Success)
-	assert.Len(t, entry.Outputs, 3)
+	assert.Len(t, entry.Outputs, 4, "Should cache 3 SPlsWork files + 1 .ush file")
 
-	// Verify artifacts were copied
+	// Verify artifacts were copied (only the matching files)
 	hash, _ := HashSource(sourceFile, cfg)
 	artifactDir := filepath.Join(cacheDir, "artifacts", hash)
-	for _, output := range outputs {
-		path := filepath.Join(artifactDir, output)
-		assert.FileExists(t, path, "Artifact should exist in cache")
+
+	// Check .ush file
+	assert.FileExists(t, filepath.Join(artifactDir, "test.ush"), ".ush file should be cached")
+
+	// Check SPlsWork files
+	for _, output := range splsWorkOutputs {
+		path := filepath.Join(artifactDir, "SPlsWork", output)
+		assert.FileExists(t, path, "SPlsWork artifact should exist in cache")
+	}
+
+	// Verify unrelated files were NOT cached
+	for _, output := range unrelatedFiles {
+		path := filepath.Join(artifactDir, "SPlsWork", output)
+		assert.NoFileExists(t, path, "Unrelated file should NOT be cached")
 	}
 }
 
 func TestCache_Restore(t *testing.T) {
 	// Create temp directories
 	cacheDir := t.TempDir()
-	outputDir := t.TempDir()
+	sourceDir := t.TempDir()
 	restoreDir := t.TempDir()
-	sourceFile := filepath.Join(t.TempDir(), "test.usp")
+	sourceFile := filepath.Join(sourceDir, "test.usp")
+	splsWorkDir := filepath.Join(sourceDir, "SPlsWork")
 
 	// Create source file
 	err := os.WriteFile(sourceFile, []byte("test source"), 0o644)
 	require.NoError(t, err)
 
-	// Create fake output files
-	outputs := []string{"test.dll", "test.elf"}
-	for _, output := range outputs {
-		path := filepath.Join(outputDir, output)
+	// Create SPlsWork directory
+	err = os.MkdirAll(splsWorkDir, 0o755)
+	require.NoError(t, err)
+
+	// Create fake output files in SPlsWork
+	splsWorkOutputs := []string{"test.dll", "S2_test.elf"}
+	for _, output := range splsWorkOutputs {
+		path := filepath.Join(splsWorkDir, output)
 		err := os.WriteFile(path, []byte("cached content"), 0o644)
 		require.NoError(t, err)
 	}
+
+	// Create .ush file
+	ushFile := filepath.Join(sourceDir, "test.ush")
+	err = os.WriteFile(ushFile, []byte("header content"), 0o644)
+	require.NoError(t, err)
 
 	// Create cache and store
 	cache, err := New(cacheDir)
@@ -150,7 +266,7 @@ func TestCache_Restore(t *testing.T) {
 		UserFolders: []string{},
 	}
 
-	err = cache.Store(sourceFile, cfg, outputDir, true)
+	err = cache.Store(sourceFile, cfg, true)
 	require.NoError(t, err)
 
 	// Get entry
@@ -162,10 +278,17 @@ func TestCache_Restore(t *testing.T) {
 	err = cache.Restore(entry, restoreDir)
 	require.NoError(t, err)
 
-	// Verify files were restored
-	for _, output := range outputs {
-		path := filepath.Join(restoreDir, output)
-		assert.FileExists(t, path, "File should be restored")
+	// Verify .ush file was restored
+	restoredUsh := filepath.Join(restoreDir, "test.ush")
+	assert.FileExists(t, restoredUsh, ".ush file should be restored")
+	content, err := os.ReadFile(restoredUsh)
+	require.NoError(t, err)
+	assert.Equal(t, "header content", string(content))
+
+	// Verify SPlsWork files were restored
+	for _, output := range splsWorkOutputs {
+		path := filepath.Join(restoreDir, "SPlsWork", output)
+		assert.FileExists(t, path, "SPlsWork file should be restored")
 
 		content, err := os.ReadFile(path)
 		require.NoError(t, err)
@@ -175,15 +298,20 @@ func TestCache_Restore(t *testing.T) {
 
 func TestCache_Clear(t *testing.T) {
 	cacheDir := t.TempDir()
-	sourceFile := filepath.Join(t.TempDir(), "test.usp")
-	outputDir := t.TempDir()
+	sourceDir := t.TempDir()
+	sourceFile := filepath.Join(sourceDir, "test.usp")
+	splsWorkDir := filepath.Join(sourceDir, "SPlsWork")
 
 	// Create source file
 	err := os.WriteFile(sourceFile, []byte("test source"), 0o644)
 	require.NoError(t, err)
 
-	// Create output file
-	err = os.WriteFile(filepath.Join(outputDir, "test.dll"), []byte("output"), 0o644)
+	// Create SPlsWork directory
+	err = os.MkdirAll(splsWorkDir, 0o755)
+	require.NoError(t, err)
+
+	// Create output file in SPlsWork
+	err = os.WriteFile(filepath.Join(splsWorkDir, "test.dll"), []byte("output"), 0o644)
 	require.NoError(t, err)
 
 	// Create cache and store
@@ -193,7 +321,7 @@ func TestCache_Clear(t *testing.T) {
 
 	cfg := &config.Config{Target: "234"}
 
-	err = cache.Store(sourceFile, cfg, outputDir, true)
+	err = cache.Store(sourceFile, cfg, true)
 	require.NoError(t, err)
 
 	// Verify entry exists
@@ -230,15 +358,20 @@ func TestCache_Stats(t *testing.T) {
 
 	// Add some entries with different content (so different hashes)
 	for i := 0; i < 3; i++ {
-		sourceFile := filepath.Join(t.TempDir(), "test.usp")
-		outputDir := t.TempDir()
+		sourceDir := t.TempDir()
+		sourceFile := filepath.Join(sourceDir, "test.usp")
+		splsWorkDir := filepath.Join(sourceDir, "SPlsWork")
 
 		// Different content = different hash
 		err := os.WriteFile(sourceFile, []byte(fmt.Sprintf("test %d", i)), 0o644)
 		require.NoError(t, err)
 
+		// Create SPlsWork directory (even if empty, so CollectOutputs doesn't fail)
+		err = os.MkdirAll(splsWorkDir, 0o755)
+		require.NoError(t, err)
+
 		cfg := &config.Config{Target: "234"}
-		err = cache.Store(sourceFile, cfg, outputDir, true)
+		err = cache.Store(sourceFile, cfg, true)
 		require.NoError(t, err)
 	}
 

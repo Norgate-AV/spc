@@ -23,7 +23,8 @@ type Entry struct {
 	// Timestamp when this entry was created
 	Timestamp time.Time `json:"timestamp"`
 
-	// Outputs lists the compiled artifact files (relative to SPlsWork/)
+	// Outputs lists the compiled artifact files with their relative locations
+	// Format: "SPlsWork/example.dll" or "example.ush" (adjacent to source)
 	Outputs []string `json:"outputs"`
 
 	// Success indicates if the build was successful
