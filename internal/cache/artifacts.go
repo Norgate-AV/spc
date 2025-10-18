@@ -18,6 +18,8 @@
 package cache
 
 import (
+	"bytes"
+	"crypto/sha256"
 	"fmt"
 	"io"
 	"os"
@@ -35,7 +37,8 @@ func CopyArtifacts(baseDir, destDir string, outputs []string) error {
 		src := filepath.Join(baseDir, output)
 		dst := filepath.Join(destDir, output)
 
-		if err := copyFile(src, dst); err != nil {
+		// Only copy if file doesn't exist or differs (optimization for re-caching)
+		if _, err := copyFileIfNeeded(src, dst); err != nil {
 			return fmt.Errorf("failed to copy %s: %w", output, err)
 		}
 	}
@@ -55,7 +58,8 @@ func RestoreArtifacts(cacheDir, destDir string, outputs []string) error {
 			return fmt.Errorf("failed to create output directory: %w", err)
 		}
 
-		if err := copyFile(src, dst); err != nil {
+		// Only copy if file doesn't exist or differs
+		if _, err := copyFileIfNeeded(src, dst); err != nil {
 			return fmt.Errorf("failed to restore %s: %w", output, err)
 		}
 	}
@@ -249,4 +253,78 @@ func copyFile(src, dst string) error {
 	}
 
 	return os.Chmod(dst, srcInfo.Mode())
+}
+
+// filesAreIdentical checks if two files have the same content
+// Uses a fast size check first, then hash comparison if needed
+func filesAreIdentical(file1, file2 string) bool {
+	// Get file info for both files
+	info1, err1 := os.Stat(file1)
+	info2, err2 := os.Stat(file2)
+
+	// If either file doesn't exist or we can't stat it, they're not identical
+	if err1 != nil || err2 != nil {
+		return false
+	}
+
+	// Quick check: if sizes differ, files are different
+	if info1.Size() != info2.Size() {
+		return false
+	}
+
+	// If size is 0, both empty files are identical
+	if info1.Size() == 0 {
+		return true
+	}
+
+	// For small files (< 64KB), compare content directly
+	if info1.Size() < 65536 {
+		content1, err1 := os.ReadFile(file1)
+		content2, err2 := os.ReadFile(file2)
+		if err1 != nil || err2 != nil {
+			return false
+		}
+		return bytes.Equal(content1, content2)
+	}
+
+	// For larger files, use hash comparison
+	hash1, err1 := hashFile(file1)
+	hash2, err2 := hashFile(file2)
+	if err1 != nil || err2 != nil {
+		return false
+	}
+
+	return bytes.Equal(hash1, hash2)
+}
+
+// hashFile computes SHA256 hash of a file
+func hashFile(path string) ([]byte, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	hash := sha256.New()
+	if _, err := io.Copy(hash, file); err != nil {
+		return nil, err
+	}
+
+	return hash.Sum(nil), nil
+}
+
+// copyFileIfNeeded copies a file only if destination doesn't exist or differs from source
+// Returns true if file was copied, false if copy was skipped
+func copyFileIfNeeded(src, dst string) (bool, error) {
+	// Check if files are already identical
+	if filesAreIdentical(src, dst) {
+		return false, nil // Skip copy
+	}
+
+	// Files differ or destination doesn't exist, perform copy
+	if err := copyFile(src, dst); err != nil {
+		return false, err
+	}
+
+	return true, nil
 }

@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/Norgate-AV/spc/internal/config"
 	"github.com/stretchr/testify/assert"
@@ -866,4 +867,100 @@ func TestCache_UshFiles_TargetSpecific(t *testing.T) {
 			}
 		}
 	}
+}
+
+// TestCache_Restore_SkipsIdenticalFiles verifies that restoration only copies files
+// when necessary, skipping identical files to improve performance
+func TestCache_Restore_SkipsIdenticalFiles(t *testing.T) {
+	cacheDir := t.TempDir()
+	sourceDir := t.TempDir()
+	sourceFile := filepath.Join(sourceDir, "test.usp")
+	splsWorkDir := filepath.Join(sourceDir, "SPlsWork")
+
+	// Create source file
+	err := os.WriteFile(sourceFile, []byte("test source"), 0o644)
+	require.NoError(t, err)
+
+	// Create SPlsWork directory
+	err = os.MkdirAll(splsWorkDir, 0o755)
+	require.NoError(t, err)
+
+	// Create output files
+	outputs := []string{"test.dll", "test.cs"}
+	for _, output := range outputs {
+		path := filepath.Join(splsWorkDir, output)
+		err := os.WriteFile(path, []byte(fmt.Sprintf("content of %s", output)), 0o644)
+		require.NoError(t, err)
+	}
+
+	// Create .ush file
+	ushFile := filepath.Join(sourceDir, "test.ush")
+	err = os.WriteFile(ushFile, []byte("header content"), 0o644)
+	require.NoError(t, err)
+
+	// Create cache and store
+	cache, err := New(cacheDir)
+	require.NoError(t, err)
+	defer cache.Close()
+
+	cfg := &config.Config{Target: "3", UserFolders: []string{}}
+	err = cache.Store(sourceFile, cfg, true)
+	require.NoError(t, err)
+
+	// Get entry
+	entry, err := cache.Get(sourceFile, cfg)
+	require.NoError(t, err)
+	require.NotNil(t, entry)
+
+	// First restoration (files don't exist) - should copy all files
+	restoreDir1 := t.TempDir()
+	err = cache.Restore(entry, restoreDir1)
+	require.NoError(t, err)
+
+	// Verify files were created
+	for _, output := range outputs {
+		assert.FileExists(t, filepath.Join(restoreDir1, "SPlsWork", output))
+	}
+	assert.FileExists(t, filepath.Join(restoreDir1, "test.ush"))
+
+	// Get timestamps of restored files
+	dllPath := filepath.Join(restoreDir1, "SPlsWork", "test.dll")
+	infoBeforeSecondRestore, err := os.Stat(dllPath)
+	require.NoError(t, err)
+
+	// Wait a moment to ensure timestamps would differ if file was rewritten
+	time.Sleep(10 * time.Millisecond)
+
+	// Second restoration (files already exist and are identical) - should skip copying
+	err = cache.Restore(entry, restoreDir1)
+	require.NoError(t, err)
+
+	// Verify file timestamp didn't change (file wasn't copied)
+	infoAfterSecondRestore, err := os.Stat(dllPath)
+	require.NoError(t, err)
+	assert.Equal(t, infoBeforeSecondRestore.ModTime(), infoAfterSecondRestore.ModTime(),
+		"File should not be copied when it's already identical")
+
+	// Now modify a file to make it different
+	err = os.WriteFile(dllPath, []byte("corrupted content"), 0o644)
+	require.NoError(t, err)
+
+	infoAfterModification, err := os.Stat(dllPath)
+	require.NoError(t, err)
+
+	// Third restoration (file exists but differs) - should copy the modified file
+	time.Sleep(10 * time.Millisecond)
+	err = cache.Restore(entry, restoreDir1)
+	require.NoError(t, err)
+
+	// Verify file was restored (timestamp changed and content correct)
+	infoAfterThirdRestore, err := os.Stat(dllPath)
+	require.NoError(t, err)
+	assert.NotEqual(t, infoAfterModification.ModTime(), infoAfterThirdRestore.ModTime(),
+		"File should be copied when it differs from cached version")
+
+	// Verify content was correctly restored
+	content, err := os.ReadFile(dllPath)
+	require.NoError(t, err)
+	assert.Equal(t, "content of test.dll", string(content), "Content should be restored correctly")
 }
