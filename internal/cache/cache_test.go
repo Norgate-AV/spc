@@ -113,13 +113,13 @@ func TestCollectOutputs_Filtering(t *testing.T) {
 	err = os.WriteFile(ushFile, []byte("header"), 0o644)
 	require.NoError(t, err)
 
-	// Collect outputs for example1.usp
-	outputs, err := CollectOutputs(sourceFile)
+	// Test 1: Collect outputs for target "234" (all series)
+	outputs, err := CollectOutputs(sourceFile, "234")
 	require.NoError(t, err)
 
 	// Should collect: 1 .ush file + 9 SPlsWork files = 10 total
 	expectedCount := 10
-	assert.Len(t, outputs, expectedCount, "Should collect .ush + SPlsWork files for example1.usp")
+	assert.Len(t, outputs, expectedCount, "Should collect .ush + SPlsWork files for example1.usp with target 234")
 
 	// Verify correct files are included
 	outputMap := make(map[string]bool)
@@ -141,6 +141,30 @@ func TestCollectOutputs_Filtering(t *testing.T) {
 	assert.False(t, outputMap[filepath.Join("SPlsWork", "S2_example2.c")], "Should NOT include S2_example2.c")
 	assert.False(t, outputMap[filepath.Join("SPlsWork", "Version.ini")], "Should NOT include shared library files")
 	assert.False(t, outputMap[filepath.Join("SPlsWork", "ManagedUtilities.dll")], "Should NOT include shared library files")
+
+	// Test 2: Collect outputs for target "34" (no series 2)
+	outputs34, err := CollectOutputs(sourceFile, "34")
+	require.NoError(t, err)
+
+	// Should collect: 1 .ush file + 3 SPlsWork files (no S2_* files) = 4 total
+	expectedCount34 := 4
+	assert.Len(t, outputs34, expectedCount34, "Should collect only Series 3/4 files for target 34")
+
+	outputMap34 := make(map[string]bool)
+	for _, output := range outputs34 {
+		outputMap34[output] = true
+	}
+
+	// Check that Series 3/4 files are included
+	assert.True(t, outputMap34["example1.ush"], "Should include example1.ush")
+	assert.True(t, outputMap34[filepath.Join("SPlsWork", "example1.dll")], "Should include example1.dll")
+	assert.True(t, outputMap34[filepath.Join("SPlsWork", "example1.cs")], "Should include example1.cs")
+	assert.True(t, outputMap34[filepath.Join("SPlsWork", "example1.inf")], "Should include example1.inf")
+
+	// Check that Series 2 files are NOT included
+	assert.False(t, outputMap34[filepath.Join("SPlsWork", "S2_example1.c")], "Should NOT include S2_example1.c for target 34")
+	assert.False(t, outputMap34[filepath.Join("SPlsWork", "S2_example1.h")], "Should NOT include S2_example1.h for target 34")
+	assert.False(t, outputMap34[filepath.Join("SPlsWork", "S2_example1.elf")], "Should NOT include S2_example1.elf for target 34")
 }
 
 func TestCache_StoreAndGet(t *testing.T) {

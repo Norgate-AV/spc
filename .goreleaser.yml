@@ -75,10 +75,10 @@ release:
 scoops:
   - name: spc
     repository:
-      owner: damienbutt
-      name: scoop-bucket
+      owner: Norgate-AV
+      name: scoop-bucket-crestron
       token: "{{ .Env.RELEASE_TOKEN }}"
     directory: bucket
     homepage: https://github.com/Norgate-AV/spc
-    description: "CLI wrapper for the Crestron SIMPL+ Compiler"
+    description: "A better way to compile Crestron SIMPL+ files"
     license: MIT

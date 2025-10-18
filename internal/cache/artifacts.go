@@ -72,8 +72,9 @@ func RestoreArtifacts(cacheDir, destDir string, outputs []string) error {
 //  1. The source file directory for .ush header files
 //  2. The SPlsWork directory for source-specific artifacts
 //
+// Only collects files for the specified target (e.g., if target="34", skips S2_* files)
 // Returns paths relative to the source directory (e.g., "example.ush", "SPlsWork/example.dll")
-func CollectOutputs(sourceFile string) ([]string, error) {
+func CollectOutputs(sourceFile string, target string) ([]string, error) {
 	var outputs []string
 
 	// Extract base name without extension (e.g., "example1" from "example1.usp")
@@ -111,9 +112,9 @@ func CollectOutputs(sourceFile string) ([]string, error) {
 			continue
 		}
 
-		// Check if this file belongs to our source file
-		// Match patterns: {basename}.* or S2_{basename}.*
-		if isOutputFile(name, baseName) {
+		// Check if this file belongs to our source file AND target
+		// Match patterns: {basename}.* or S2_{basename}.* (depending on target)
+		if isOutputFileForTarget(name, baseName, target) {
 			// Store with SPlsWork/ prefix for proper path handling
 			outputs = append(outputs, filepath.Join("SPlsWork", name))
 		}
@@ -218,6 +219,51 @@ func isOutputFile(filename, baseName string) bool {
 		}
 	}
 
+	return false
+}
+
+// isOutputFileForTarget checks if a file belongs to the given source AND target
+// For target "34", only matches example1.* (not S2_example1.*)
+// For target "234", matches both example1.* and S2_example1.*
+func isOutputFileForTarget(filename, baseName, target string) bool {
+	fileBase := filename[:len(filename)-len(filepath.Ext(filename))]
+
+	// Direct match: example1.dll, example1.cs, etc.
+	// These are for Series 3 and 4
+	if fileBase == baseName {
+		return true
+	}
+
+	// Target-prefixed match: S2_example1.c, S2_example1.h, S3_example1.*, S4_example1.*
+	if len(fileBase) > 3 && fileBase[0] == 'S' && fileBase[2] == '_' {
+		// Extract the series number
+		seriesChar := fileBase[1]
+
+		// Extract the base name after prefix
+		if fileBase[3:] == baseName {
+			// Check if this series is in the target
+			// For example, if target="34", we want Series 3 and 4, not Series 2
+			switch seriesChar {
+			case '2':
+				return contains(target, '2')
+			case '3':
+				return contains(target, '3')
+			case '4':
+				return contains(target, '4')
+			}
+		}
+	}
+
+	return false
+}
+
+// contains checks if a string contains a specific character
+func contains(s string, ch byte) bool {
+	for i := 0; i < len(s); i++ {
+		if s[i] == ch {
+			return true
+		}
+	}
 	return false
 }
 

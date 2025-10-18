@@ -22,7 +22,7 @@ func TestLoader_SetupViperDefaults(t *testing.T) {
 	loader.setupViperDefaults()
 
 	assert.Equal(t, "C:/Program Files (x86)/Crestron/Simpl/SPlusCC.exe", viper.GetString("compiler_path"))
-	assert.Equal(t, "234", viper.GetString("target"))
+	assert.Equal(t, "34", viper.GetString("target"))
 	assert.Equal(t, false, viper.GetBool("silent"))
 	assert.Equal(t, false, viper.GetBool("verbose"))
 }

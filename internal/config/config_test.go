@@ -99,7 +99,7 @@ func TestLoad(t *testing.T) {
 					abs, _ := filepath.Abs("C:/SPlusCC.exe")
 					return abs
 				}(),
-				Target:      "234",
+				Target:      "34",
 				UserFolders: nil,
 			},
 			wantErr: false,

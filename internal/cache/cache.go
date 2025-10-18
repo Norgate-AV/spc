@@ -126,7 +126,8 @@ func (c *Cache) Store(sourceFile string, cfg *config.Config, success bool) error
 	}
 
 	// Collect outputs from both source dir and SPlsWork dir
-	outputs, err := CollectOutputs(sourceFile)
+	// Only collect files for the current target (prevents caching leftover files)
+	outputs, err := CollectOutputs(sourceFile, cfg.Target)
 	if err != nil {
 		return fmt.Errorf("failed to collect outputs: %w", err)
 	}
