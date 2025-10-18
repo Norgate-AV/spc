@@ -167,6 +167,38 @@ func (c *Cache) Store(sourceFile string, cfg *config.Config, success bool) error
 		}
 	}
 
+	// Cache shared files (only once, if not already cached)
+	if success {
+		sourceDir := filepath.Dir(sourceFile)
+		if err := c.cacheSharedFiles(sourceDir); err != nil {
+			// Don't fail the whole operation if shared files caching fails
+			fmt.Fprintf(os.Stderr, "Warning: Failed to cache shared files: %v\n", err)
+		}
+	}
+
+	return nil
+}
+
+// cacheSharedFiles caches shared library files if not already cached
+func (c *Cache) cacheSharedFiles(sourceDir string) error {
+	// Check if shared files are already cached
+	sharedDir := filepath.Join(c.root, "shared")
+	if _, err := os.Stat(sharedDir); err == nil {
+		// Already cached, skip
+		return nil
+	}
+
+	// Collect shared files
+	sharedFiles, err := CollectSharedFiles(sourceDir)
+	if err != nil || len(sharedFiles) == 0 {
+		return err
+	}
+
+	// Copy shared files to cache
+	if err := CopyArtifacts(sourceDir, sharedDir, sharedFiles); err != nil {
+		return fmt.Errorf("failed to copy shared files: %w", err)
+	}
+
 	return nil
 }
 
@@ -176,8 +208,72 @@ func (c *Cache) Restore(entry *Entry, destDir string) error {
 		return fmt.Errorf("cannot restore failed build or build with no outputs")
 	}
 
+	// Restore source-specific artifacts
 	artifactDir := c.artifactDir(entry.Hash)
-	return RestoreArtifacts(artifactDir, destDir, entry.Outputs)
+	if err := RestoreArtifacts(artifactDir, destDir, entry.Outputs); err != nil {
+		return err
+	}
+
+	// Restore shared files if needed (if SPlsWork exists but shared files are missing)
+	if err := c.restoreSharedFiles(destDir); err != nil {
+		// Don't fail if shared files restoration fails - they might already exist
+		// or will be recreated on next full compile
+		fmt.Fprintf(os.Stderr, "Warning: Failed to restore shared files: %v\n", err)
+	}
+
+	return nil
+}
+
+// restoreSharedFiles restores shared library files if they're missing
+func (c *Cache) restoreSharedFiles(destDir string) error {
+	sharedDir := filepath.Join(c.root, "shared")
+
+	// Check if we have cached shared files
+	if _, err := os.Stat(sharedDir); os.IsNotExist(err) {
+		return nil // No shared files cached, skip
+	}
+
+	// Check if shared files already exist in destination
+	splsWorkDir := filepath.Join(destDir, "SPlsWork")
+	if needsSharedFiles, err := checkSharedFilesExist(splsWorkDir); err != nil || !needsSharedFiles {
+		return err // Either error or files already exist
+	}
+
+	// Collect what shared files we have cached
+	entries, err := os.ReadDir(filepath.Join(sharedDir, "SPlsWork"))
+	if err != nil {
+		return err
+	}
+
+	var sharedFiles []string
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			sharedFiles = append(sharedFiles, filepath.Join("SPlsWork", entry.Name()))
+		}
+	}
+
+	// Restore shared files
+	return RestoreArtifacts(sharedDir, destDir, sharedFiles)
+}
+
+// checkSharedFilesExist checks if shared files are missing from SPlsWork
+// Returns true if shared files need to be restored
+func checkSharedFilesExist(splsWorkDir string) (bool, error) {
+	// If SPlsWork doesn't exist, we definitely need shared files
+	if _, err := os.Stat(splsWorkDir); os.IsNotExist(err) {
+		return true, nil
+	}
+
+	// Check for presence of at least one common shared file
+	commonSharedFiles := []string{"Version.ini", "ManagedUtilities.dll", "SplusLibrary.dll"}
+	for _, file := range commonSharedFiles {
+		if _, err := os.Stat(filepath.Join(splsWorkDir, file)); err == nil {
+			return false, nil // At least one shared file exists, assume others are there
+		}
+	}
+
+	// No shared files found, need to restore them
+	return true, nil
 }
 
 // Clear removes all cache entries and artifacts

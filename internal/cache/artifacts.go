@@ -66,7 +66,7 @@ func RestoreArtifacts(cacheDir, destDir string, outputs []string) error {
 // CollectOutputs scans for compiled output files specific to the given source file.
 // It checks two locations:
 //  1. The source file directory for .ush header files
-//  2. The SPlsWork directory for other artifacts
+//  2. The SPlsWork directory for source-specific artifacts
 //
 // Returns paths relative to the source directory (e.g., "example.ush", "SPlsWork/example.dll")
 func CollectOutputs(sourceFile string) ([]string, error) {
@@ -116,6 +116,85 @@ func CollectOutputs(sourceFile string) ([]string, error) {
 	}
 
 	return outputs, nil
+}
+
+// CollectSharedFiles scans the SPlsWork directory for shared library files
+// that are not specific to any source file (DLLs, config files, etc.)
+// Returns paths relative to the source directory (e.g., "SPlsWork/Version.ini")
+func CollectSharedFiles(sourceDir string) ([]string, error) {
+	var sharedFiles []string
+
+	splsWorkDir := filepath.Join(sourceDir, "SPlsWork")
+
+	entries, err := os.ReadDir(splsWorkDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil // No SPlsWork directory
+		}
+		return nil, fmt.Errorf("failed to read SPlsWork directory: %w", err)
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+
+		name := entry.Name()
+
+		// Check if this is a shared file (not matching any source pattern)
+		// Shared files: *.dll, *.dat, *.xml, *.ini (except source-specific ones)
+		if isSharedFile(name) {
+			sharedFiles = append(sharedFiles, filepath.Join("SPlsWork", name))
+		}
+	}
+
+	return sharedFiles, nil
+}
+
+// isSharedFile checks if a file is a shared library/config file
+func isSharedFile(filename string) bool {
+	// Common shared file patterns in SPlsWork
+	ext := filepath.Ext(filename)
+	baseName := filename[:len(filename)-len(ext)]
+
+	// DLL files that don't match source patterns
+	if ext == ".dll" {
+		// Check if it's NOT a source-specific DLL (which would be in format "sourcename.dll")
+		// Shared DLLs have names like "ManagedUtilities.dll", "SplusLibrary.dll"
+		// If it contains certain keywords, it's shared
+		sharedKeywords := []string{"Managed", "Simpl", "Sharp", "Splus", "Smart", "Utilities", "Newtonsoft", "Json"}
+		for _, keyword := range sharedKeywords {
+			if containsIgnoreCase(baseName, keyword) {
+				return true
+			}
+		}
+	}
+
+	// Config/data files are always shared
+	if ext == ".ini" || ext == ".xml" || ext == ".dat" || ext == ".der" {
+		return true
+	}
+
+	return false
+}
+
+// containsIgnoreCase checks if a string contains a substring (case-insensitive)
+func containsIgnoreCase(s, substr string) bool {
+	s = filepath.Base(s) // normalize
+	return len(s) >= len(substr) &&
+		(s == substr ||
+			len(s) > len(substr) &&
+				(s[:len(substr)] == substr || s[len(s)-len(substr):] == substr ||
+					findSubstring(s, substr)))
+}
+
+func findSubstring(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
 }
 
 // isOutputFile checks if a filename belongs to the given source base name
