@@ -24,6 +24,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // CopyArtifacts copies compiled outputs from a base directory to cache
@@ -225,22 +226,51 @@ func isOutputFile(filename, baseName string) bool {
 // isOutputFileForTarget checks if a file belongs to the given source AND target
 // For target "34", only matches example1.* (not S2_example1.*)
 // For target "234", matches both example1.* and S2_example1.*
+//
+// Handles the compiler's space-to-underscore conversion:
+// - Source: "example 3.usp"
+// - .ush/.inf files: "example 3.ush" (spaces kept)
+// - .cs/.dll files: "example_3.cs" (spaces→underscores)
+// - S2_* files: "S2_example_3.c" (spaces→underscores)
+//
+// Important: .cs, .dll, .inf files are Series 3/4 specific (no S3_/S4_ prefix)
+// For target "2", only match S2_* files (and .ush which is always present)
 func isOutputFileForTarget(filename, baseName, target string) bool {
 	fileBase := filename[:len(filename)-len(filepath.Ext(filename))]
+	ext := filepath.Ext(filename)
 
-	// Direct match: example1.dll, example1.cs, etc.
-	// These are for Series 3 and 4
-	if fileBase == baseName {
+	// Create underscore version of baseName for comparison
+	// The compiler converts spaces to underscores in certain file types
+	baseNameWithUnderscore := strings.ReplaceAll(baseName, " ", "_")
+
+	// .ush files are always included (generated for all targets)
+	if ext == ".ush" && (fileBase == baseName || fileBase == baseNameWithUnderscore) {
 		return true
 	}
 
+	// Direct match: example1.dll, example1.cs, example1.inf, etc. or example_3.dll, example_3.cs
+	// These are for Series 3 and 4 ONLY (they have no prefix)
+	// Skip these if target is only Series 2
+	if fileBase == baseName || fileBase == baseNameWithUnderscore {
+		// .cs, .dll, .inf are Series 3/4 specific
+		if ext == ".cs" || ext == ".dll" || ext == ".inf" {
+			return contains(target, '3') || contains(target, '4')
+		}
+		// Other extensions (if any) also belong to Series 3/4
+		return contains(target, '3') || contains(target, '4')
+	}
+
 	// Target-prefixed match: S2_example1.c, S2_example1.h, S3_example1.*, S4_example1.*
+	// Also matches: S2_example_3.c when source is "example 3.usp"
 	if len(fileBase) > 3 && fileBase[0] == 'S' && fileBase[2] == '_' {
 		// Extract the series number
 		seriesChar := fileBase[1]
 
-		// Extract the base name after prefix
-		if fileBase[3:] == baseName {
+		// Extract the base name after prefix (e.g., "example1" from "S2_example1")
+		nameAfterPrefix := fileBase[3:]
+
+		// Check if this matches our base name (with or without underscores)
+		if nameAfterPrefix == baseName || nameAfterPrefix == baseNameWithUnderscore {
 			// Check if this series is in the target
 			// For example, if target="34", we want Series 3 and 4, not Series 2
 			switch seriesChar {
