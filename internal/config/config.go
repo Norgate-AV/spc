@@ -12,7 +12,7 @@ import (
 // Default configuration values
 const (
 	DefaultCompilerPath = "C:/Program Files (x86)/Crestron/Simpl/SPlusCC.exe"
-	DefaultTarget       = "234"
+	DefaultTarget       = "34"
 	DefaultSilent       = false
 	DefaultVerbose      = false
 )
