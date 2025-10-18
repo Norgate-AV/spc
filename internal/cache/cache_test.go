@@ -605,7 +605,7 @@ func TestCache_SharedFiles_Restoration(t *testing.T) {
 	for _, file := range sharedFiles {
 		path := filepath.Join(restoreDir, "SPlsWork", file)
 		assert.FileExists(t, path, "Shared file %s should be restored", file)
-		
+
 		content, err := os.ReadFile(path)
 		require.NoError(t, err)
 		assert.Equal(t, fmt.Sprintf("content of %s", file), string(content))
@@ -759,4 +759,111 @@ func TestCache_SharedFiles_NotDuplicated(t *testing.T) {
 	info2, err := os.Stat(cachedSharedFile)
 	require.NoError(t, err)
 	assert.Equal(t, info1.ModTime(), info2.ModTime(), "Shared file should not be re-cached")
+}
+
+// TestCache_UshFiles_TargetSpecific verifies that .ush files are cached per-target
+// and the correct .ush file is restored for each target
+func TestCache_UshFiles_TargetSpecific(t *testing.T) {
+	cacheDir := t.TempDir()
+	sourceDir := t.TempDir()
+	sourceFile := filepath.Join(sourceDir, "test.usp")
+	splsWorkDir := filepath.Join(sourceDir, "SPlsWork")
+
+	// Create source file
+	err := os.WriteFile(sourceFile, []byte("test source"), 0o644)
+	require.NoError(t, err)
+
+	// Create SPlsWork directory
+	err = os.MkdirAll(splsWorkDir, 0o755)
+	require.NoError(t, err)
+
+	// Create cache
+	cache, err := New(cacheDir)
+	require.NoError(t, err)
+	defer cache.Close()
+
+	// Test with different targets and different .ush content
+	type targetTest struct {
+		target     string
+		ushContent string
+		dllFile    string
+	}
+
+	tests := []targetTest{
+		{target: "2", ushContent: "USH content for series 2 with SMWRev=2.02.05", dllFile: "S2_test.elf"},
+		{target: "3", ushContent: "USH content for series 3 with SMWRev=3.00.00", dllFile: "test.dll"},
+		{target: "34", ushContent: "USH content for series 34 combined", dllFile: "test.dll"},
+	}
+
+	cachedUshContents := make(map[string]string)
+
+	// Cache builds for each target with different .ush files
+	for _, tt := range tests {
+		// Create target-specific .ush file
+		ushFile := filepath.Join(sourceDir, "test.ush")
+		err := os.WriteFile(ushFile, []byte(tt.ushContent), 0o644)
+		require.NoError(t, err)
+
+		// Create target-specific output file
+		outputFile := filepath.Join(splsWorkDir, tt.dllFile)
+		err = os.WriteFile(outputFile, []byte(fmt.Sprintf("output for %s", tt.target)), 0o644)
+		require.NoError(t, err)
+
+		cfg := &config.Config{Target: tt.target, UserFolders: []string{}}
+
+		// Store in cache
+		err = cache.Store(sourceFile, cfg, true)
+		require.NoError(t, err)
+
+		// Remember what we cached
+		cachedUshContents[tt.target] = tt.ushContent
+
+		// Verify it was cached
+		hash, err := HashSource(sourceFile, cfg)
+		require.NoError(t, err)
+		cachedUshPath := filepath.Join(cacheDir, "artifacts", hash, "test.ush")
+		assert.FileExists(t, cachedUshPath, ".ush should be cached for target %s", tt.target)
+
+		content, err := os.ReadFile(cachedUshPath)
+		require.NoError(t, err)
+		assert.Equal(t, tt.ushContent, string(content), "Cached .ush content should match for target %s", tt.target)
+
+		// Clean up for next iteration
+		err = os.Remove(ushFile)
+		require.NoError(t, err)
+		err = os.Remove(outputFile)
+		require.NoError(t, err)
+	}
+
+	// Now verify restoration - each target should restore its own .ush file
+	for _, tt := range tests {
+		cfg := &config.Config{Target: tt.target, UserFolders: []string{}}
+
+		// Get cache entry
+		entry, err := cache.Get(sourceFile, cfg)
+		require.NoError(t, err)
+		require.NotNil(t, entry, "Should have cache entry for target %s", tt.target)
+
+		// Restore to a clean directory
+		restoreDir := t.TempDir()
+		err = cache.Restore(entry, restoreDir)
+		require.NoError(t, err)
+
+		// Verify the correct .ush file was restored
+		restoredUshPath := filepath.Join(restoreDir, "test.ush")
+		assert.FileExists(t, restoredUshPath, ".ush should be restored for target %s", tt.target)
+
+		content, err := os.ReadFile(restoredUshPath)
+		require.NoError(t, err)
+		assert.Equal(t, cachedUshContents[tt.target], string(content),
+			"Restored .ush should match cached content for target %s", tt.target)
+
+		// Verify it's the target-specific content, not from another target
+		for otherTarget, otherContent := range cachedUshContents {
+			if otherTarget != tt.target {
+				assert.NotEqual(t, otherContent, string(content),
+					"Target %s .ush should not contain target %s content", tt.target, otherTarget)
+			}
+		}
+	}
 }
