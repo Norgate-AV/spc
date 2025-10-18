@@ -37,6 +37,9 @@ bin/
 build/
 dist/
 
+# Cache
+.spc-cache/
+
 # Local History
 .history/
 

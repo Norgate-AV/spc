@@ -32,6 +32,7 @@ func init() {
 	rootCmd.PersistentFlags().BoolP("verbose", "v", false, "Verbose output")
 	rootCmd.PersistentFlags().StringP("out", "o", "", "Output file for compilation logs")
 	rootCmd.PersistentFlags().StringSliceP("usersplusfolder", "u", []string{}, "User SIMPL+ folders")
+	rootCmd.PersistentFlags().Bool("no-cache", false, "Disable build cache")
 	rootCmd.AddCommand(buildCmd)
 
 	viper.SetDefault("compiler_path", "C:/Program Files (x86)/Crestron/Simpl/SPlusCC.exe")
