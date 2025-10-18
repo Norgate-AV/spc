@@ -380,3 +380,383 @@ func TestCache_Stats(t *testing.T) {
 	assert.Equal(t, 3, count)
 	assert.GreaterOrEqual(t, size, int64(0))
 }
+
+// TestCache_DifferentTargets verifies that different targets create different cache entries
+func TestCache_DifferentTargets(t *testing.T) {
+	cacheDir := t.TempDir()
+	sourceDir := t.TempDir()
+	sourceFile := filepath.Join(sourceDir, "test.usp")
+	splsWorkDir := filepath.Join(sourceDir, "SPlsWork")
+
+	// Create source file
+	err := os.WriteFile(sourceFile, []byte("test source"), 0o644)
+	require.NoError(t, err)
+
+	// Create SPlsWork directory
+	err = os.MkdirAll(splsWorkDir, 0o755)
+	require.NoError(t, err)
+
+	// Create cache
+	cache, err := New(cacheDir)
+	require.NoError(t, err)
+	defer cache.Close()
+
+	// Store same source file with different targets
+	targets := []string{"2", "3", "4", "23", "34", "234"}
+	hashes := make(map[string]string)
+
+	for _, target := range targets {
+		cfg := &config.Config{
+			Target:      target,
+			UserFolders: []string{},
+		}
+
+		// Create target-specific output file
+		outputFile := filepath.Join(splsWorkDir, fmt.Sprintf("test_%s.dll", target))
+		err := os.WriteFile(outputFile, []byte(fmt.Sprintf("output for %s", target)), 0o644)
+		require.NoError(t, err)
+
+		// Store in cache
+		err = cache.Store(sourceFile, cfg, true)
+		require.NoError(t, err)
+
+		// Get hash for this target
+		hash, err := HashSource(sourceFile, cfg)
+		require.NoError(t, err)
+		hashes[target] = hash
+
+		// Verify we can retrieve the entry
+		entry, err := cache.Get(sourceFile, cfg)
+		require.NoError(t, err)
+		require.NotNil(t, entry, "Should find cache entry for target %s", target)
+		assert.Equal(t, target, entry.Target)
+	}
+
+	// Verify all targets produced different hashes
+	uniqueHashes := make(map[string]bool)
+	for _, hash := range hashes {
+		uniqueHashes[hash] = true
+	}
+	assert.Equal(t, len(targets), len(uniqueHashes), "Each target should produce a unique hash")
+
+	// Verify cache stats show all entries
+	count, _, err := cache.Stats()
+	require.NoError(t, err)
+	assert.Equal(t, len(targets), count, "Should have one entry per target")
+}
+
+// TestCache_SharedFiles_IncrementalCaching verifies that shared files are cached incrementally
+// when building with different targets (e.g., series2 first, then series3)
+func TestCache_SharedFiles_IncrementalCaching(t *testing.T) {
+	cacheDir := t.TempDir()
+	sourceDir := t.TempDir()
+	sourceFile := filepath.Join(sourceDir, "test.usp")
+	splsWorkDir := filepath.Join(sourceDir, "SPlsWork")
+
+	// Create source file
+	err := os.WriteFile(sourceFile, []byte("test source"), 0o644)
+	require.NoError(t, err)
+
+	// Create SPlsWork directory
+	err = os.MkdirAll(splsWorkDir, 0o755)
+	require.NoError(t, err)
+
+	// Create cache
+	cache, err := New(cacheDir)
+	require.NoError(t, err)
+	defer cache.Close()
+
+	// Simulate series2 build (creates only Version.ini as shared file)
+	series2SharedFiles := []string{"Version.ini"}
+	for _, file := range series2SharedFiles {
+		path := filepath.Join(splsWorkDir, file)
+		err := os.WriteFile(path, []byte("series2 shared"), 0o644)
+		require.NoError(t, err)
+	}
+
+	// Create series2 source-specific files
+	series2Files := []string{"S2_test.c", "S2_test.h", "S2_test.elf"}
+	for _, file := range series2Files {
+		path := filepath.Join(splsWorkDir, file)
+		err := os.WriteFile(path, []byte("series2 output"), 0o644)
+		require.NoError(t, err)
+	}
+
+	cfg2 := &config.Config{Target: "2", UserFolders: []string{}}
+	err = cache.Store(sourceFile, cfg2, true)
+	require.NoError(t, err)
+
+	// Verify Version.ini was cached as shared file
+	sharedDir := filepath.Join(cacheDir, "shared", "SPlsWork")
+	assert.FileExists(t, filepath.Join(sharedDir, "Version.ini"), "Version.ini should be cached")
+
+	// Count shared files after series2 (should be 1)
+	entries, err := os.ReadDir(sharedDir)
+	require.NoError(t, err)
+	assert.Len(t, entries, 1, "Should have only Version.ini after series2 build")
+
+	// Simulate series3 build (creates .NET DLLs + config files as shared files)
+	series3SharedFiles := []string{
+		"ManagedUtilities.dll",
+		"SimplSharpHelperInterface.dll",
+		"SplusLibrary.dll",
+		"Simpl#Config.xml",
+		"SimplSharpData.dat",
+	}
+	for _, file := range series3SharedFiles {
+		path := filepath.Join(splsWorkDir, file)
+		err := os.WriteFile(path, []byte("series3 shared"), 0o644)
+		require.NoError(t, err)
+	}
+
+	// Create series3 source-specific files
+	series3Files := []string{"test.cs", "test.dll", "test.inf"}
+	for _, file := range series3Files {
+		path := filepath.Join(splsWorkDir, file)
+		err := os.WriteFile(path, []byte("series3 output"), 0o644)
+		require.NoError(t, err)
+	}
+
+	cfg3 := &config.Config{Target: "3", UserFolders: []string{}}
+	err = cache.Store(sourceFile, cfg3, true)
+	require.NoError(t, err)
+
+	// Verify all shared files are now cached (Version.ini + 5 series3 files = 6 total)
+	entries, err = os.ReadDir(sharedDir)
+	require.NoError(t, err)
+	assert.Len(t, entries, 6, "Should have Version.ini + 5 series3 shared files")
+
+	// Verify specific files exist
+	for _, file := range series3SharedFiles {
+		assert.FileExists(t, filepath.Join(sharedDir, file), "%s should be cached", file)
+	}
+	assert.FileExists(t, filepath.Join(sharedDir, "Version.ini"), "Version.ini should still be cached")
+}
+
+// TestCache_SharedFiles_Restoration verifies that shared files are restored correctly
+func TestCache_SharedFiles_Restoration(t *testing.T) {
+	cacheDir := t.TempDir()
+	sourceDir := t.TempDir()
+	restoreDir := t.TempDir()
+	sourceFile := filepath.Join(sourceDir, "test.usp")
+	splsWorkDir := filepath.Join(sourceDir, "SPlsWork")
+
+	// Create source file
+	err := os.WriteFile(sourceFile, []byte("test source"), 0o644)
+	require.NoError(t, err)
+
+	// Create SPlsWork directory
+	err = os.MkdirAll(splsWorkDir, 0o755)
+	require.NoError(t, err)
+
+	// Create shared library files
+	sharedFiles := []string{
+		"Version.ini",
+		"ManagedUtilities.dll",
+		"SimplSharpHelperInterface.dll",
+	}
+	for _, file := range sharedFiles {
+		path := filepath.Join(splsWorkDir, file)
+		err := os.WriteFile(path, []byte(fmt.Sprintf("content of %s", file)), 0o644)
+		require.NoError(t, err)
+	}
+
+	// Create source-specific files
+	sourceSpecificFiles := []string{"test.cs", "test.dll", "test.inf"}
+	for _, file := range sourceSpecificFiles {
+		path := filepath.Join(splsWorkDir, file)
+		err := os.WriteFile(path, []byte("source-specific content"), 0o644)
+		require.NoError(t, err)
+	}
+
+	// Create .ush file
+	ushFile := filepath.Join(sourceDir, "test.ush")
+	err = os.WriteFile(ushFile, []byte("header content"), 0o644)
+	require.NoError(t, err)
+
+	// Create cache and store
+	cache, err := New(cacheDir)
+	require.NoError(t, err)
+	defer cache.Close()
+
+	cfg := &config.Config{Target: "3", UserFolders: []string{}}
+	err = cache.Store(sourceFile, cfg, true)
+	require.NoError(t, err)
+
+	// Get entry
+	entry, err := cache.Get(sourceFile, cfg)
+	require.NoError(t, err)
+	require.NotNil(t, entry)
+
+	// Restore to different directory
+	err = cache.Restore(entry, restoreDir)
+	require.NoError(t, err)
+
+	// Verify source-specific files were restored
+	for _, file := range sourceSpecificFiles {
+		path := filepath.Join(restoreDir, "SPlsWork", file)
+		assert.FileExists(t, path, "%s should be restored", file)
+	}
+
+	// Verify .ush file was restored
+	assert.FileExists(t, filepath.Join(restoreDir, "test.ush"), ".ush file should be restored")
+
+	// Verify shared library files were restored
+	for _, file := range sharedFiles {
+		path := filepath.Join(restoreDir, "SPlsWork", file)
+		assert.FileExists(t, path, "Shared file %s should be restored", file)
+		
+		content, err := os.ReadFile(path)
+		require.NoError(t, err)
+		assert.Equal(t, fmt.Sprintf("content of %s", file), string(content))
+	}
+}
+
+// TestCache_MixedTargets_Isolation verifies that mixed target builds (e.g., "23")
+// maintain proper cache isolation from single-target builds
+func TestCache_MixedTargets_Isolation(t *testing.T) {
+	cacheDir := t.TempDir()
+	sourceDir := t.TempDir()
+	sourceFile := filepath.Join(sourceDir, "test.usp")
+	splsWorkDir := filepath.Join(sourceDir, "SPlsWork")
+
+	// Create source file
+	err := os.WriteFile(sourceFile, []byte("test source"), 0o644)
+	require.NoError(t, err)
+
+	// Create SPlsWork directory
+	err = os.MkdirAll(splsWorkDir, 0o755)
+	require.NoError(t, err)
+
+	// Create cache
+	cache, err := New(cacheDir)
+	require.NoError(t, err)
+	defer cache.Close()
+
+	// Build for series2 only
+	series2File := filepath.Join(splsWorkDir, "S2_test.elf")
+	err = os.WriteFile(series2File, []byte("series2 output"), 0o644)
+	require.NoError(t, err)
+
+	cfg2 := &config.Config{Target: "2", UserFolders: []string{}}
+	err = cache.Store(sourceFile, cfg2, true)
+	require.NoError(t, err)
+
+	// Build for series3 only
+	series3File := filepath.Join(splsWorkDir, "test.dll")
+	err = os.WriteFile(series3File, []byte("series3 output"), 0o644)
+	require.NoError(t, err)
+
+	cfg3 := &config.Config{Target: "3", UserFolders: []string{}}
+	err = cache.Store(sourceFile, cfg3, true)
+	require.NoError(t, err)
+
+	// Build for series2+3 mixed
+	series23Both := []string{
+		"S2_test.elf",
+		"test.dll",
+	}
+	for _, file := range series23Both {
+		path := filepath.Join(splsWorkDir, file)
+		err := os.WriteFile(path, []byte("mixed output"), 0o644)
+		require.NoError(t, err)
+	}
+
+	cfg23 := &config.Config{Target: "23", UserFolders: []string{}}
+	err = cache.Store(sourceFile, cfg23, true)
+	require.NoError(t, err)
+
+	// Verify all three builds created separate cache entries
+	hash2, _ := HashSource(sourceFile, cfg2)
+	hash3, _ := HashSource(sourceFile, cfg3)
+	hash23, _ := HashSource(sourceFile, cfg23)
+
+	assert.NotEqual(t, hash2, hash3, "Series2 and Series3 should have different hashes")
+	assert.NotEqual(t, hash2, hash23, "Series2 and Series23 should have different hashes")
+	assert.NotEqual(t, hash3, hash23, "Series3 and Series23 should have different hashes")
+
+	// Verify we can retrieve each entry independently
+	entry2, err := cache.Get(sourceFile, cfg2)
+	require.NoError(t, err)
+	require.NotNil(t, entry2)
+	assert.Equal(t, "2", entry2.Target)
+
+	entry3, err := cache.Get(sourceFile, cfg3)
+	require.NoError(t, err)
+	require.NotNil(t, entry3)
+	assert.Equal(t, "3", entry3.Target)
+
+	entry23, err := cache.Get(sourceFile, cfg23)
+	require.NoError(t, err)
+	require.NotNil(t, entry23)
+	assert.Equal(t, "23", entry23.Target)
+}
+
+// TestCache_SharedFiles_NotDuplicated verifies that shared files are not duplicated
+// when the same shared file is encountered in multiple builds
+func TestCache_SharedFiles_NotDuplicated(t *testing.T) {
+	cacheDir := t.TempDir()
+	sourceDir := t.TempDir()
+	sourceFile := filepath.Join(sourceDir, "test.usp")
+	splsWorkDir := filepath.Join(sourceDir, "SPlsWork")
+
+	// Create source file
+	err := os.WriteFile(sourceFile, []byte("test source"), 0o644)
+	require.NoError(t, err)
+
+	// Create SPlsWork directory
+	err = os.MkdirAll(splsWorkDir, 0o755)
+	require.NoError(t, err)
+
+	// Create cache
+	cache, err := New(cacheDir)
+	require.NoError(t, err)
+	defer cache.Close()
+
+	// Create shared file with specific content
+	sharedFile := filepath.Join(splsWorkDir, "Version.ini")
+	originalContent := "original version content"
+	err = os.WriteFile(sharedFile, []byte(originalContent), 0o644)
+	require.NoError(t, err)
+
+	// Create source-specific file
+	sourceSpecific := filepath.Join(splsWorkDir, "test.dll")
+	err = os.WriteFile(sourceSpecific, []byte("output"), 0o644)
+	require.NoError(t, err)
+
+	// Store first build
+	cfg1 := &config.Config{Target: "3", UserFolders: []string{}}
+	err = cache.Store(sourceFile, cfg1, true)
+	require.NoError(t, err)
+
+	// Verify shared file was cached
+	cachedSharedFile := filepath.Join(cacheDir, "shared", "SPlsWork", "Version.ini")
+	assert.FileExists(t, cachedSharedFile)
+	content, err := os.ReadFile(cachedSharedFile)
+	require.NoError(t, err)
+	assert.Equal(t, originalContent, string(content))
+
+	// Get file info for later comparison
+	info1, err := os.Stat(cachedSharedFile)
+	require.NoError(t, err)
+
+	// Modify the shared file (simulating a second build that might have different content)
+	modifiedContent := "modified version content"
+	err = os.WriteFile(sharedFile, []byte(modifiedContent), 0o644)
+	require.NoError(t, err)
+
+	// Store second build with different target (should NOT overwrite cached shared file)
+	cfg2 := &config.Config{Target: "4", UserFolders: []string{}}
+	err = cache.Store(sourceFile, cfg2, true)
+	require.NoError(t, err)
+
+	// Verify cached shared file was NOT overwritten (should still have original content)
+	content, err = os.ReadFile(cachedSharedFile)
+	require.NoError(t, err)
+	assert.Equal(t, originalContent, string(content), "Cached shared file should not be overwritten")
+
+	// Verify file timestamp didn't change (file wasn't re-written)
+	info2, err := os.Stat(cachedSharedFile)
+	require.NoError(t, err)
+	assert.Equal(t, info1.ModTime(), info2.ModTime(), "Shared file should not be re-cached")
+}

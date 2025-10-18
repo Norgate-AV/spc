@@ -181,21 +181,30 @@ func (c *Cache) Store(sourceFile string, cfg *config.Config, success bool) error
 
 // cacheSharedFiles caches shared library files if not already cached
 func (c *Cache) cacheSharedFiles(sourceDir string) error {
-	// Check if shared files are already cached
 	sharedDir := filepath.Join(c.root, "shared")
-	if _, err := os.Stat(sharedDir); err == nil {
-		// Already cached, skip
-		return nil
-	}
 
-	// Collect shared files
+	// Collect shared files that need to be cached
 	sharedFiles, err := CollectSharedFiles(sourceDir)
 	if err != nil || len(sharedFiles) == 0 {
 		return err
 	}
 
-	// Copy shared files to cache
-	if err := CopyArtifacts(sourceDir, sharedDir, sharedFiles); err != nil {
+	// Check which shared files are missing from cache
+	var missingFiles []string
+	for _, file := range sharedFiles {
+		cachedFile := filepath.Join(sharedDir, file)
+		if _, err := os.Stat(cachedFile); os.IsNotExist(err) {
+			missingFiles = append(missingFiles, file)
+		}
+	}
+
+	// If all files already cached, skip
+	if len(missingFiles) == 0 {
+		return nil
+	}
+
+	// Copy missing shared files to cache
+	if err := CopyArtifacts(sourceDir, sharedDir, missingFiles); err != nil {
 		return fmt.Errorf("failed to copy shared files: %w", err)
 	}
 
