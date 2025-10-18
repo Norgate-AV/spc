@@ -34,6 +34,7 @@ func New(cacheDir string) (*Cache, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to get working directory: %w", err)
 		}
+
 		cacheDir = filepath.Join(cwd, DefaultCacheDir)
 	}
 
@@ -70,6 +71,7 @@ func (c *Cache) Close() error {
 	if c.db != nil {
 		return c.db.Close()
 	}
+
 	return nil
 }
 
@@ -84,6 +86,7 @@ func (c *Cache) Get(sourceFile string, cfg *config.Config) (*Entry, error) {
 	var entry Entry
 	err = c.db.View(func(tx *bbolt.Tx) error {
 		b := tx.Bucket([]byte(bucketName))
+
 		data := b.Get([]byte(hash))
 		if data == nil {
 			return nil // Cache miss
@@ -130,10 +133,12 @@ func (c *Cache) Store(sourceFile string, cfg *config.Config, outputDir string, s
 	// Store metadata in BoltDB
 	err = c.db.Update(func(tx *bbolt.Tx) error {
 		b := tx.Bucket([]byte(bucketName))
+
 		data, err := json.Marshal(entry)
 		if err != nil {
 			return err
 		}
+
 		return b.Put([]byte(hash), data)
 	})
 	if err != nil {
@@ -196,6 +201,7 @@ func (c *Cache) Stats() (int, int64, error) {
 
 	err := c.db.View(func(tx *bbolt.Tx) error {
 		b := tx.Bucket([]byte(bucketName))
+
 		count = b.Stats().KeyN
 		return nil
 	})
@@ -209,9 +215,11 @@ func (c *Cache) Stats() (int, int64, error) {
 		if err != nil {
 			return nil // Skip errors
 		}
+
 		if !info.IsDir() {
 			totalSize += info.Size()
 		}
+
 		return nil
 	})
 

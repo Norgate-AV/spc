@@ -76,6 +76,7 @@ func copyFile(src, dst string) error {
 	if err != nil {
 		return err
 	}
+
 	defer srcFile.Close()
 
 	// Create parent directory if needed
@@ -87,6 +88,7 @@ func copyFile(src, dst string) error {
 	if err != nil {
 		return err
 	}
+
 	defer dstFile.Close()
 
 	if _, err := io.Copy(dstFile, srcFile); err != nil {

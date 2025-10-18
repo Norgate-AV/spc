@@ -26,6 +26,7 @@ func HashSource(sourceFile string, cfg *config.Config) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to open source file: %w", err)
 	}
+
 	defer f.Close()
 
 	if _, err := io.Copy(h, f); err != nil {
@@ -54,6 +55,7 @@ func HashFile(path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+
 	defer f.Close()
 
 	h := sha256.New()
