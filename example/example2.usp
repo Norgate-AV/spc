@@ -125,6 +125,6 @@ MyStruct1 struct;
   Uncomment and place one-time startup code here
   (This code will get called when the system starts up)
 *******************************************************************************************/
-// Function Main() {
-
-// }
+Function Main() {
+    print("Hello, Example 2!\n");
+}
