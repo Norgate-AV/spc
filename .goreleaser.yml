@@ -61,7 +61,7 @@ scoops:
     repository:
       owner: Norgate-AV
       name: scoop-norgateav-crestron
-      token: "{{ .Env.RELEASE_TOKEN }}"
+      token: "{{ .Env.SCOOP_NORGATEAV_CRESTRON }}"
     directory: bucket
     homepage: https://github.com/Norgate-AV/spc
     description: "A better way to compile Crestron SIMPL+ files"

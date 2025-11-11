@@ -161,7 +161,7 @@ echo ""
 print_status "2. 📋 Checking Required Secrets..."
 
 check_secret "GITHUB_TOKEN" "GitHub Actions token (auto-provided)"
-check_secret "RELEASE_TOKEN" "Token for Scoop repository"
+check_secret "SCOOP_NORGATEAV_CRESTRON" "Token for Scoop repository"
 echo ""
 
 # 3. Required repositories check
@@ -196,16 +196,16 @@ fi
 
 print_status "6. 🔑 Checking Release Token Permissions..."
 
-if [ -z "${RELEASE_TOKEN}" ]; then
-    print_warning "RELEASE_TOKEN is not set; skipping permission checks"
-    WARNINGS+=("RELEASE_TOKEN is not set; skipping permission checks")
+if [ -z "${SCOOP_NORGATEAV_CRESTRON}" ]; then
+    print_warning "SCOOP_NORGATEAV_CRESTRON is not set; skipping permission checks"
+    WARNINGS+=("SCOOP_NORGATEAV_CRESTRON is not set; skipping permission checks")
 else
     REPOS_TO_CHECK=(
         "Norgate-AV/scoop-norgateav-crestron"
     )
 
     for repo in "${REPOS_TO_CHECK[@]}"; do
-        check_token_contents_permission "${RELEASE_TOKEN}" "$repo" "RELEASE_TOKEN"
+        check_token_contents_permission "${SCOOP_NORGATEAV_CRESTRON}" "$repo" "SCOOP_NORGATEAV_CRESTRON"
     done
 fi
 echo ""
