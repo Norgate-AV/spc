@@ -12,9 +12,11 @@ before:
 
 builds:
   - main: ./main.go
-    binary: spc
+    binary: spc.exe
     env:
       - CGO_ENABLED=0
+    goos:
+      - windows
     goarch:
       - amd64
     flags:
@@ -35,24 +37,6 @@ archives:
     format_overrides:
       - goos: windows
         formats: [zip]
-
-signs:
-  - artifacts: checksum
-    args:
-      [
-        "--pinentry-mode",
-        "loopback",
-        "--batch",
-        "-u",
-        "{{ .Env.GPG_FINGERPRINT }}",
-        "--output",
-        "${signature}",
-        "--detach-sign",
-        "${artifact}",
-      ]
-
-source:
-  enabled: true
 
 checksum:
   name_template: checksums.txt
@@ -76,7 +60,7 @@ scoops:
   - name: spc
     repository:
       owner: Norgate-AV
-      name: scoop-bucket-crestron
+      name: scoop-norgateav-crestron
       token: "{{ .Env.RELEASE_TOKEN }}"
     directory: bucket
     homepage: https://github.com/Norgate-AV/spc

@@ -81,18 +81,6 @@ check_gh_auth() {
     fi
 }
 
-check_ghcr_auth() {
-    local token="$1"
-    local actor="$2"
-
-    if echo "${token}" | docker login ghcr.io -u "${actor}" --password-stdin &> /dev/null; then
-        print_success "Authenticated with GHCR"
-    else
-        MISSING_AUTH+=("GHCR")
-        print_error "Failed to authenticate with GHCR"
-    fi
-}
-
 check_token_contents_permission() {
     local token="$1"
     local repo="$2"
@@ -135,33 +123,6 @@ check_token_contents_permission() {
     fi
 }
 
-check_token_pr_permission() {
-    local token="$1"
-    local repo="$2"
-    local token_name="$3"
-
-    if [ -z "$token" ]; then
-        return
-    fi
-
-    local http_status
-    http_status=$(curl -s -o /dev/null -w "%{http_code}" \
-        -X POST \
-        -H "Authorization: token $token" \
-        -d '{"title":"Test PR","head":"test-branch","base":"master","draft":true}' \
-        "https://api.github.com/repos/$repo/pulls")
-
-    if [ "$http_status" -eq 422 ]; then
-        print_success "pull_requests:write permission verified for $repo"
-    elif [ "$http_status" -eq 403 ]; then
-        print_error "Failed to create draft PR on $repo (HTTP status: $http_status). This indicates a permission issue."
-        MISSING_PERMISSIONS+=("$token_name (failed to create draft PR on $repo)")
-    else
-        print_error "Unexpected error when creating a draft PR on $repo (HTTP status: $http_status)"
-        MISSING_PERMISSIONS+=("$token_name (unexpected error when creating a draft PR on $repo)")
-    fi
-}
-
 check_goreleaser_env_vars() {
     print_status "Checking for referenced environment variables in .goreleaser.yml..."
 
@@ -200,16 +161,13 @@ echo ""
 print_status "2. 📋 Checking Required Secrets..."
 
 check_secret "GITHUB_TOKEN" "GitHub Actions token (auto-provided)"
-check_secret "RELEASE_TOKEN" "Token for Homebrew tap repository"
-check_secret "GPG_PRIVATE_KEY" "GPG private key for package signing"
-check_secret "GPG_FINGERPRINT" "GPG key fingerprint for package signing"
+check_secret "RELEASE_TOKEN" "Token for Scoop repository"
 echo ""
 
 # 3. Required repositories check
 print_status "3. 🏗️ Checking Required Repositories..."
 
-check_github_repo "damienbutt/scoop-bucket" "Scoop bucket repository" "${GITHUB_TOKEN}"
-check_github_repo "damienbutt/winget-pkgs" "Winget package repository" "${GITHUB_TOKEN}"
+check_github_repo "Norgate-AV/scoop-norgateav-crestron" "Scoop bucket repository" "${GITHUB_TOKEN}"
 echo ""
 
 # 4. Check build tools
@@ -218,7 +176,6 @@ print_status "4. 🔧 Checking Build Tools..."
 check_tool "go"
 check_tool "git"
 check_tool "gh"
-check_tool "gpg"
 check_tool "git-cliff"
 check_tool "typos"
 check_tool "curl"
@@ -237,9 +194,6 @@ if command -v gh &> /dev/null; then
     check_gh_auth
 fi
 
-check_ghcr_auth "${GITHUB_TOKEN}" "${GITHUB_ACTOR}"
-echo ""
-
 print_status "6. 🔑 Checking Release Token Permissions..."
 
 if [ -z "${RELEASE_TOKEN}" ]; then
@@ -247,13 +201,11 @@ if [ -z "${RELEASE_TOKEN}" ]; then
     WARNINGS+=("RELEASE_TOKEN is not set; skipping permission checks")
 else
     REPOS_TO_CHECK=(
-        "damienbutt/scoop-bucket"
-        "damienbutt/winget-pkgs"
+        "Norgate-AV/scoop-norgateav-crestron"
     )
 
     for repo in "${REPOS_TO_CHECK[@]}"; do
         check_token_contents_permission "${RELEASE_TOKEN}" "$repo" "RELEASE_TOKEN"
-        check_token_pr_permission "${RELEASE_TOKEN}" "$repo" "RELEASE_TOKEN"
     done
 fi
 echo ""
@@ -342,7 +294,6 @@ print_success "All required repositories are accessible."
 print_success "All required build tools are installed."
 print_success "All release token permissions are verified."
 print_success "GitHub CLI is authenticated."
-print_success "Authenticated with GHCR."
 
 if [ "$GO_RELEASER_SUCCESS" = true ]; then
     print_success "GoReleaser release process completed successfully."

@@ -61,16 +61,9 @@ jobs:
               cargo install typos-cli --force
           fi
 
-      - name: Import GPG key
-        uses: crazy-max/ghaction-import-gpg@v6
-        with:
-          gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
-
       - name: Run GoReleaser test
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
-          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
-          GPG_FINGERPRINT: ${{ secrets.GPG_FINGERPRINT }}
         run: |
           make goreleaser-test

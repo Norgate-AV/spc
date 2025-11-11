@@ -99,6 +99,9 @@ deps:
 
 ci: deps lint test build
 
+goreleaser-test:
+	@./scripts/test-goreleaser.sh
+
 # Show help
 help:
 	@echo "Available targets:"
@@ -114,5 +117,6 @@ help:
 	@echo "  lint          - Run fmt, vet, and golangci-lint"
 	@echo "  deps          - Download dependencies"
 	@echo "  ci            - Run CI pipeline (deps, lint, test, build)"
+	@echo "  goreleaser-test - Test GoReleaser configuration (snapshot build)"
 	@echo "  all           - Clean, test, and build"
 	@echo "  help          - Show this help"
