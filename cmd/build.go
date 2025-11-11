@@ -79,9 +79,7 @@ func runBuild(cmd *cobra.Command, args []string) error {
 			fmt.Printf("Compiling %s...\n", filepath.Base(file))
 		}
 
-		success := true
 		if err := compileSingle(cfg, absFile); err != nil {
-			success = false
 			// Store failed build in cache too (so we don't retry immediately)
 			if !noCache && buildCache != nil {
 				_ = buildCache.Store(absFile, cfg, false)
@@ -91,7 +89,7 @@ func runBuild(cmd *cobra.Command, args []string) error {
 
 		// Store successful build in cache
 		if !noCache && buildCache != nil {
-			if err := buildCache.Store(absFile, cfg, success); err != nil {
+			if err := buildCache.Store(absFile, cfg, true); err != nil {
 				fmt.Fprintf(os.Stderr, "Warning: Failed to cache build: %v\n", err)
 			}
 		}

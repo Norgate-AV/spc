@@ -331,7 +331,7 @@ func (c *Cache) Stats() (int, int64, error) {
 
 	// Calculate total artifact size
 	artifactsDir := filepath.Join(c.root, "artifacts")
-	err = filepath.Walk(artifactsDir, func(path string, info os.FileInfo, err error) error {
+	_ = filepath.Walk(artifactsDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return nil // Skip errors
 		}

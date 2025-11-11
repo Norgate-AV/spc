@@ -203,26 +203,6 @@ func findSubstring(s, substr string) bool {
 	return false
 }
 
-// isOutputFile checks if a filename belongs to the given source base name
-func isOutputFile(filename, baseName string) bool {
-	fileBase := filename[:len(filename)-len(filepath.Ext(filename))]
-
-	// Direct match: example1.dll, example1.cs, etc.
-	if fileBase == baseName {
-		return true
-	}
-
-	// Target-prefixed match: S2_example1.c, S2_example1.h, etc.
-	if len(fileBase) > 3 && fileBase[0] == 'S' && fileBase[2] == '_' {
-		// Extract after "S2_" prefix
-		if fileBase[3:] == baseName {
-			return true
-		}
-	}
-
-	return false
-}
-
 // isOutputFileForTarget checks if a file belongs to the given source AND target
 // For target "34", only matches example1.* (not S2_example1.*)
 // For target "234", matches both example1.* and S2_example1.*

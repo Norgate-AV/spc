@@ -86,8 +86,10 @@ vet:
 	@go vet ./...
 
 # Run both fmt and vet
-lint: fmt vet
-	@golangci-lint run 2>/dev/null || echo "⚠️  golangci-lint not installed"
+lint:
+	@go fmt ./...
+	@go vet ./...
+	@go tool golangci-lint run 2>/dev/null || echo "⚠️  golangci-lint not installed"
 
 # Build and run tests
 all: clean test build

@@ -186,10 +186,10 @@ func TestLoader_BindCommandFlags(t *testing.T) {
 	cmd.Flags().StringSliceP("usersplusfolder", "u", []string{}, "User folders")
 
 	// Set flag values
-	cmd.Flags().Set("target", "3")
-	cmd.Flags().Set("verbose", "true")
-	cmd.Flags().Set("out", "custom.log")
-	cmd.Flags().Set("usersplusfolder", "C:/Include1,C:/Include2")
+	_ = cmd.Flags().Set("target", "3")
+	_ = cmd.Flags().Set("verbose", "true")
+	_ = cmd.Flags().Set("out", "custom.log")
+	_ = cmd.Flags().Set("usersplusfolder", "C:/Include1,C:/Include2")
 
 	loader := NewLoader()
 	loader.bindCommandFlags(cmd)
@@ -247,7 +247,7 @@ verbose: true`
 		cmd.Flags().BoolP("silent", "s", false, "Silent mode")
 
 		// Flag overrides
-		cmd.Flags().Set("target", "4")
+		_ = cmd.Flags().Set("target", "4")
 
 		loader := NewLoader()
 		cfg, err := loader.LoadForBuild(cmd, []string{testFile})
